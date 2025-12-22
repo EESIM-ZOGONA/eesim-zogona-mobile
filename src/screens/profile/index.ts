@@ -8,3 +8,4 @@ export * from './my-events-screen';
 export * from './my-donations-screen';
 export * from './my-cell-screen';
 export * from './my-favorites-screen';
+export * from './social-media-screen';

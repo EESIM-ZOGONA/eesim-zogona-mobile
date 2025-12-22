@@ -270,6 +270,15 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
           <View style={styles.menuCard}>
             <MenuItem
+              icon="globe-outline"
+              title="Nos médias"
+              subtitle="Réseaux sociaux et liens"
+              onPress={() => navigation.navigate('SocialMedia')}
+              iconBg="#dbeafe"
+              iconColor="#2563eb"
+            />
+            <View style={styles.menuDivider} />
+            <MenuItem
               icon="settings-outline"
               title="Parametres"
               onPress={() => navigation.navigate('Settings')}

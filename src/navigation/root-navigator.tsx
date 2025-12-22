@@ -21,7 +21,10 @@ import {
   MyDonationsScreen,
   MyCellScreen,
   MyFavoritesScreen,
+  SocialMediaScreen,
 } from '../screens/profile';
+import { MeditationsScreen, MeditationDetailScreen } from '../screens/meditations';
+import { QuizScreen, QuizPlayScreen, QuizResultScreen } from '../screens/quiz';
 import { TabNavigator } from './tab-navigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -74,6 +77,12 @@ export function RootNavigator() {
         <Stack.Screen name="MyDonations" component={MyDonationsScreen} />
         <Stack.Screen name="MyCell" component={MyCellScreen} />
         <Stack.Screen name="MyFavorites" component={MyFavoritesScreen} />
+        <Stack.Screen name="SocialMedia" component={SocialMediaScreen} />
+        <Stack.Screen name="Meditations" component={MeditationsScreen} />
+        <Stack.Screen name="MeditationDetail" component={MeditationDetailScreen} />
+        <Stack.Screen name="Quiz" component={QuizScreen} />
+        <Stack.Screen name="QuizPlay" component={QuizPlayScreen} />
+        <Stack.Screen name="QuizResult" component={QuizResultScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

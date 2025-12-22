@@ -170,8 +170,67 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         </View>
 
+        {/* Quick Features */}
+        <View style={styles.quickFeaturesRow}>
+          <TouchableOpacity
+            style={styles.quickFeatureCard}
+            onPress={() => navigation.navigate('Meditations')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#7c3aed', '#6d28d9']}
+              style={styles.quickFeatureGradient}
+            >
+              <Ionicons name="book" size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.quickFeatureText}>Méditations</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickFeatureCard}
+            onPress={() => navigation.navigate('Quiz')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#059669', '#047857']}
+              style={styles.quickFeatureGradient}
+            >
+              <Ionicons name="help-circle" size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.quickFeatureText}>Quiz</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickFeatureCard}
+            onPress={() => navigation.navigate('SocialMedia')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#2563eb', '#1d4ed8']}
+              style={styles.quickFeatureGradient}
+            >
+              <Ionicons name="globe" size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.quickFeatureText}>Médias</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickFeatureCard}
+            onPress={() => navigation.navigate('Events')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#d97706', '#b45309']}
+              style={styles.quickFeatureGradient}
+            >
+              <Ionicons name="calendar" size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.quickFeatureText}>Événements</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Verset du Jour - Premium Card with Pattern */}
-        <TouchableOpacity style={styles.verseCard} activeOpacity={0.95}>
+        <TouchableOpacity style={styles.verseCard} onPress={() => navigation.navigate('Meditations')} activeOpacity={0.95}>
           <ImageBackground
             source={{ uri: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800' }}
             style={styles.verseBackground}
@@ -557,6 +616,36 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.error,
+  },
+  // Quick Features
+  quickFeaturesRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  quickFeatureCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  quickFeatureGradient: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  quickFeatureText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+    textAlign: 'center',
   },
   // Verse Card - Premium Design
   verseCard: {

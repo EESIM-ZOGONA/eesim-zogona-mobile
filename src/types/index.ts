@@ -140,7 +140,50 @@ export type RootStackParamList = {
   MyDonations: undefined;
   MyCell: undefined;
   MyFavorites: undefined;
+  SocialMedia: undefined;
+  Meditations: undefined;
+  MeditationDetail: { meditation: Meditation };
+  Quiz: undefined;
+  QuizPlay: { quiz: Quiz };
+  QuizResult: { quiz: Quiz; score: number; totalQuestions: number };
 };
+
+// Meditation types
+export interface Meditation {
+  id: string;
+  title: string;
+  verse: string;
+  verseRef: string;
+  content: string;
+  reflection: string;
+  prayer: string;
+  date: string;
+  author?: string;
+  imageUrl?: string;
+}
+
+// Quiz types
+export interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  category: QuizCategory;
+  difficulty: 'easy' | 'medium' | 'hard';
+  questionCount: number;
+  timeLimit?: number; // in minutes
+  imageUrl?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation?: string;
+  verseRef?: string;
+}
+
+export type QuizCategory = 'ancien_testament' | 'nouveau_testament' | 'personnages' | 'versets' | 'general';
 
 export type MainTabParamList = {
   HomeTab: undefined;
