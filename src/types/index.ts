@@ -157,11 +157,15 @@ export type RootStackParamList = {
   // Bible routes
   Bible: undefined;
   BibleBook: { book: BibleBook };
-  BibleChapter: { book: BibleBook; chapter: number };
+  BibleChapter: { bookId: string; bookName: string; chapter: number };
   // Notes routes
   Notes: undefined;
   NoteDetail: { note: Note };
-  NoteEdit: { note?: Note };
+  NoteEdit: { note?: Note; linkedVerseRef?: string };
+  // Reading Plan routes
+  ReadingPlans: undefined;
+  ReadingPlanDetail: { plan: ReadingPlan };
+  ReadingPlanDay: { plan: ReadingPlan; day: ReadingPlanDay };
 };
 
 // Meditation types
@@ -248,3 +252,34 @@ export interface Note {
 }
 
 export type NoteCategory = 'meditation' | 'predication' | 'etude' | 'priere' | 'personnel';
+
+// Reading Plan types
+export interface ReadingPlan {
+  id: string;
+  title: string;
+  description: string;
+  duration: number; // in days
+  category: ReadingPlanCategory;
+  imageUrl?: string;
+  days: ReadingPlanDay[];
+  startDate?: string; // ISO date when user started this plan
+  completedDays?: string[]; // IDs of completed days
+}
+
+export interface ReadingPlanDay {
+  id: string;
+  day: number;
+  title: string;
+  readings: ReadingPlanReading[];
+  reflection?: string;
+}
+
+export interface ReadingPlanReading {
+  bookId: string;
+  bookName: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+}
+
+export type ReadingPlanCategory = 'debutant' | 'annuel' | 'thematique' | 'livre';

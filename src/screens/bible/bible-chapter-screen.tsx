@@ -13,7 +13,7 @@ import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, BibleVerse } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { getChapterVerses } from '../../data/bible-data';
+import { getChapterVerses, getBookById } from '../../data/bible-data';
 
 interface BibleChapterScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BibleChapter'>;
@@ -21,11 +21,13 @@ interface BibleChapterScreenProps {
 }
 
 export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProps) {
-  const { book, chapter } = route.params;
+  const { bookId, bookName, chapter } = route.params;
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const [fontSizeLevel, setFontSizeLevel] = useState<'small' | 'medium' | 'large'>('medium');
 
-  const verses = getChapterVerses(book.id, chapter);
+  const book = getBookById(bookId);
+  const totalChapters = book?.chapters || 1;
+  const verses = getChapterVerses(bookId, chapter);
 
   const fontSizes = {
     small: fontSize.md,
@@ -57,8 +59,8 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
       .join('\n');
 
     const reference = selectedVerses.length > 0
-      ? `${book.name} ${chapter}:${selectedVerses.sort((a, b) => a - b).join(', ')}`
-      : `${book.name} ${chapter}`;
+      ? `${bookName} ${chapter}:${selectedVerses.sort((a, b) => a - b).join(', ')}`
+      : `${bookName} ${chapter}`;
 
     await Share.share({
       message: `${text}\n\n— ${reference}`,
@@ -67,13 +69,13 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
 
   const goToPrevChapter = () => {
     if (chapter > 1) {
-      navigation.replace('BibleChapter', { book, chapter: chapter - 1 });
+      navigation.replace('BibleChapter', { bookId, bookName, chapter: chapter - 1 });
     }
   };
 
   const goToNextChapter = () => {
-    if (chapter < book.chapters) {
-      navigation.replace('BibleChapter', { book, chapter: chapter + 1 });
+    if (chapter < totalChapters) {
+      navigation.replace('BibleChapter', { bookId, bookName, chapter: chapter + 1 });
     }
   };
 
@@ -100,7 +102,7 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{book.name} {chapter}</Text>
+          <Text style={styles.headerTitle}>{bookName} {chapter}</Text>
           <Text style={styles.headerSubtitle}>
             {hasVerses ? `${verses.length} versets` : 'Chapitre'}
           </Text>
@@ -181,18 +183,18 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navButton, chapter >= book.chapters && styles.navButtonDisabled]}
+            style={[styles.navButton, chapter >= totalChapters && styles.navButtonDisabled]}
             onPress={goToNextChapter}
-            disabled={chapter >= book.chapters}
+            disabled={chapter >= totalChapters}
             activeOpacity={0.7}
           >
-            <Text style={[styles.navButtonText, chapter >= book.chapters && styles.navButtonTextDisabled]}>
+            <Text style={[styles.navButtonText, chapter >= totalChapters && styles.navButtonTextDisabled]}>
               Chap. {chapter + 1}
             </Text>
             <Ionicons
               name="chevron-forward"
               size={20}
-              color={chapter >= book.chapters ? colors.text.tertiary : colors.primary}
+              color={chapter >= totalChapters ? colors.text.tertiary : colors.primary}
             />
           </TouchableOpacity>
         </View>

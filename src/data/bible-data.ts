@@ -128,6 +128,11 @@ export function getBooksByTestament(testament: 'old' | 'new'): BibleBook[] {
   return bibleBooks.filter(book => book.testament === testament);
 }
 
+// Fonction pour obtenir un livre par son ID
+export function getBookById(bookId: string): BibleBook | undefined {
+  return bibleBooks.find(book => book.id === bookId);
+}
+
 // Verset du jour (mock)
 export function getDailyVerse(): BibleVerse {
   const verses = [

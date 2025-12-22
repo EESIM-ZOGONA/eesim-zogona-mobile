@@ -28,7 +28,11 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
   const renderChapterItem = ({ item: chapter }: { item: number }) => (
     <TouchableOpacity
       style={styles.chapterCard}
-      onPress={() => navigation.navigate('BibleChapter', { book, chapter })}
+      onPress={() => navigation.navigate('BibleChapter', {
+        bookId: book.id,
+        bookName: book.name,
+        chapter,
+      })}
       activeOpacity={0.8}
     >
       <Text style={styles.chapterNumber}>{chapter}</Text>

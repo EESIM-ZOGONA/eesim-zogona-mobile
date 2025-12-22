@@ -27,6 +27,7 @@ import { MeditationsScreen, MeditationDetailScreen, MeditationListScreen } from 
 import { QuizScreen, QuizCategoryScreen, QuizPlayScreen, QuizResultScreen } from '../screens/quiz';
 import { BibleScreen, BibleBookScreen, BibleChapterScreen } from '../screens/bible';
 import { NotesScreen, NoteDetailScreen, NoteEditScreen } from '../screens/notes';
+import { ReadingPlansScreen, ReadingPlanDetailScreen, ReadingPlanDayScreen } from '../screens/reading-plans';
 import { TabNavigator } from './tab-navigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -93,6 +94,9 @@ export function RootNavigator() {
         <Stack.Screen name="Notes" component={NotesScreen} />
         <Stack.Screen name="NoteDetail" component={NoteDetailScreen} />
         <Stack.Screen name="NoteEdit" component={NoteEditScreen} />
+        <Stack.Screen name="ReadingPlans" component={ReadingPlansScreen} />
+        <Stack.Screen name="ReadingPlanDetail" component={ReadingPlanDetailScreen} />
+        <Stack.Screen name="ReadingPlanDay" component={ReadingPlanDayScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
