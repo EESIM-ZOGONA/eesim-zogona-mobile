@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,60 +11,21 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, QuizQuestion } from '../../types';
+import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { getQuestionsForQuiz } from '../../data/quiz-data';
 
 interface QuizPlayScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'QuizPlay'>;
   route: RouteProp<RootStackParamList, 'QuizPlay'>;
 }
 
-// Mock questions - in real app, fetch based on quiz.id
-const mockQuestions: QuizQuestion[] = [
-  {
-    id: '1',
-    question: 'Qui a construit l\'arche selon les instructions de Dieu ?',
-    options: ['Abraham', 'Noé', 'Moïse', 'David'],
-    correctAnswer: 1,
-    explanation: 'Noé a construit l\'arche pour sauver sa famille et les animaux du déluge.',
-    verseRef: 'Genèse 6:14',
-  },
-  {
-    id: '2',
-    question: 'Combien de disciples Jésus a-t-il choisis ?',
-    options: ['7', '10', '12', '14'],
-    correctAnswer: 2,
-    explanation: 'Jésus a choisi 12 disciples pour le suivre et répandre son message.',
-    verseRef: 'Matthieu 10:1-4',
-  },
-  {
-    id: '3',
-    question: 'Dans quelle ville Jésus est-il né ?',
-    options: ['Nazareth', 'Jérusalem', 'Bethléem', 'Capernaüm'],
-    correctAnswer: 2,
-    explanation: 'Jésus est né à Bethléem, comme prophétisé par le prophète Michée.',
-    verseRef: 'Matthieu 2:1',
-  },
-  {
-    id: '4',
-    question: 'Qui a été avalé par un grand poisson ?',
-    options: ['Pierre', 'Jonas', 'Élie', 'Daniel'],
-    correctAnswer: 1,
-    explanation: 'Jonas a été avalé par un grand poisson après avoir fui l\'appel de Dieu.',
-    verseRef: 'Jonas 1:17',
-  },
-  {
-    id: '5',
-    question: 'Quel est le premier livre de la Bible ?',
-    options: ['Exode', 'Psaumes', 'Genèse', 'Matthieu'],
-    correctAnswer: 2,
-    explanation: 'La Genèse est le premier livre de la Bible, racontant la création.',
-    verseRef: 'Genèse 1:1',
-  },
-];
-
 export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
   const { quiz } = route.params;
+
+  // Récupérer les questions pour ce quiz
+  const questions = useMemo(() => getQuestionsForQuiz(quiz.id), [quiz.id]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -73,8 +34,8 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
   const [progressAnim] = useState(new Animated.Value(0));
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
 
-  const currentQuestion = mockQuestions[currentIndex];
-  const totalQuestions = mockQuestions.length;
+  const currentQuestion = questions[currentIndex];
+  const totalQuestions = questions.length;
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
 
   useEffect(() => {
@@ -135,7 +96,7 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
         score: finalScore,
         totalQuestions,
         userAnswers: finalAnswers,
-        questions: mockQuestions,
+        questions,
       });
     } else {
       setCurrentIndex((prev) => prev + 1);

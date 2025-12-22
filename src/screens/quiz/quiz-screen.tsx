@@ -11,60 +11,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, Quiz, QuizCategory } from '../../types';
+import { RootStackParamList, QuizCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { allQuizzes } from '../../data/quiz-data';
 
 interface QuizScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Quiz'>;
 }
-
-const quizzes: Quiz[] = [
-  {
-    id: '1',
-    title: 'Les personnages de la Bible',
-    description: 'Testez vos connaissances sur les grandes figures bibliques',
-    category: 'personnages',
-    difficulty: 'easy',
-    questionCount: 10,
-    timeLimit: 5,
-  },
-  {
-    id: '2',
-    title: 'L\'Ancien Testament',
-    description: 'Questions sur la Genèse, l\'Exode et les prophètes',
-    category: 'ancien_testament',
-    difficulty: 'medium',
-    questionCount: 15,
-    timeLimit: 10,
-  },
-  {
-    id: '3',
-    title: 'Les Évangiles',
-    description: 'Découvrez combien vous connaissez la vie de Jésus',
-    category: 'nouveau_testament',
-    difficulty: 'easy',
-    questionCount: 12,
-    timeLimit: 8,
-  },
-  {
-    id: '4',
-    title: 'Versets à compléter',
-    description: 'Complétez les versets bibliques célèbres',
-    category: 'versets',
-    difficulty: 'hard',
-    questionCount: 20,
-    timeLimit: 15,
-  },
-  {
-    id: '5',
-    title: 'Quiz général',
-    description: 'Un mélange de questions sur toute la Bible',
-    category: 'general',
-    difficulty: 'medium',
-    questionCount: 15,
-    timeLimit: 10,
-  },
-];
 
 const categoryConfig = {
   personnages: { icon: 'people' as const, color: '#2563eb', bg: '#dbeafe' },
@@ -89,7 +42,7 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
   };
 
   // Display only first 3 quizzes on main screen
-  const displayedQuizzes = quizzes.slice(0, 3);
+  const displayedQuizzes = allQuizzes.slice(0, 3);
 
   const handleCategoryPress = (category: QuizCategory) => {
     navigation.navigate('QuizCategory', { category });
@@ -189,7 +142,7 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
 
         <TouchableOpacity
           style={styles.dailyChallengeCard}
-          onPress={() => navigation.navigate('QuizPlay', { quiz: quizzes[0] })}
+          onPress={() => navigation.navigate('QuizPlay', { quiz: allQuizzes[0] })}
           activeOpacity={0.9}
         >
           <LinearGradient

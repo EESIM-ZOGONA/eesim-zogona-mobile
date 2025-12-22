@@ -15,105 +15,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useDebouncedCallback } from 'use-debounce';
 import { RootStackParamList, Quiz, QuizCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { allQuizzes } from '../../data/quiz-data';
 
 interface QuizCategoryScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'QuizCategory'>;
   route: RouteProp<RootStackParamList, 'QuizCategory'>;
 }
-
-// Mock quizzes - same as quiz-screen but will be filtered
-const allQuizzes: Quiz[] = [
-  {
-    id: '1',
-    title: 'Les personnages de la Bible',
-    description: 'Testez vos connaissances sur les grandes figures bibliques',
-    category: 'personnages',
-    difficulty: 'easy',
-    questionCount: 10,
-    timeLimit: 5,
-  },
-  {
-    id: '2',
-    title: 'L\'Ancien Testament',
-    description: 'Questions sur la Genèse, l\'Exode et les prophètes',
-    category: 'ancien_testament',
-    difficulty: 'medium',
-    questionCount: 15,
-    timeLimit: 10,
-  },
-  {
-    id: '3',
-    title: 'Les Évangiles',
-    description: 'Découvrez combien vous connaissez la vie de Jésus',
-    category: 'nouveau_testament',
-    difficulty: 'easy',
-    questionCount: 12,
-    timeLimit: 8,
-  },
-  {
-    id: '4',
-    title: 'Versets à compléter',
-    description: 'Complétez les versets bibliques célèbres',
-    category: 'versets',
-    difficulty: 'hard',
-    questionCount: 20,
-    timeLimit: 15,
-  },
-  {
-    id: '5',
-    title: 'Quiz général',
-    description: 'Un mélange de questions sur toute la Bible',
-    category: 'general',
-    difficulty: 'medium',
-    questionCount: 15,
-    timeLimit: 10,
-  },
-  {
-    id: '6',
-    title: 'Les miracles de Jésus',
-    description: 'Testez vos connaissances sur les miracles',
-    category: 'nouveau_testament',
-    difficulty: 'medium',
-    questionCount: 10,
-    timeLimit: 8,
-  },
-  {
-    id: '7',
-    title: 'Les paraboles',
-    description: 'Connaissez-vous les paraboles de Jésus?',
-    category: 'nouveau_testament',
-    difficulty: 'easy',
-    questionCount: 12,
-    timeLimit: 10,
-  },
-  {
-    id: '8',
-    title: 'Les rois d\'Israël',
-    description: 'De Saül à la captivité',
-    category: 'ancien_testament',
-    difficulty: 'hard',
-    questionCount: 15,
-    timeLimit: 12,
-  },
-  {
-    id: '9',
-    title: 'Les prophètes majeurs',
-    description: 'Ésaïe, Jérémie, Ézéchiel et Daniel',
-    category: 'ancien_testament',
-    difficulty: 'hard',
-    questionCount: 20,
-    timeLimit: 15,
-  },
-  {
-    id: '10',
-    title: 'Les femmes de la Bible',
-    description: 'Figures féminines importantes',
-    category: 'personnages',
-    difficulty: 'medium',
-    questionCount: 12,
-    timeLimit: 10,
-  },
-];
 
 const categoryConfig: Record<QuizCategory, { icon: keyof typeof Ionicons.glyphMap; label: string }> = {
   personnages: { icon: 'people', label: 'Personnages' },
