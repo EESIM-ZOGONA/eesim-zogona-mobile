@@ -4,3 +4,7 @@ export * from './verse-reference';
 export * from './verse-actions';
 export * from './verse-highlight-picker';
 export * from './font-size-control';
+export * from './reading-time-badge';
+export * from './bible-version-picker';
+export * from './verse-search-result';
+export * from './verse-search-list';

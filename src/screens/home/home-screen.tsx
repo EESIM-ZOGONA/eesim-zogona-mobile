@@ -24,8 +24,9 @@ import { RootStackParamList, MainTabParamList } from '../../types';
 import { Avatar, VideoCardSkeleton, ProgramCardSkeleton, EventCardSkeleton, HymnCardSkeleton } from '../../components';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../context';
-import { mockEvents, mockProgramActivities, mockHymns } from '../../utils';
+import { mockEvents, mockProgramActivities } from '../../utils';
 import { api, VideoData, getDailyVerse, BibleSearchResult } from '../../services';
+import { useFeaturedHymns } from '../../hooks';
 
 const { width } = Dimensions.get('window');
 
@@ -47,6 +48,7 @@ const formatVerseRef = (verse: BibleSearchResult): string => {
 
 export function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, isAuthenticated } = useAuth();
+  const { hymns: featuredHymns, loading: loadingHymns } = useFeaturedHymns(6);
   const [refreshing, setRefreshing] = useState(false);
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(true);
@@ -595,17 +597,28 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
           </View>
+          {loadingHymns ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              <HymnCardSkeleton />
+              <HymnCardSkeleton />
+              <HymnCardSkeleton />
+            </ScrollView>
+          ) : (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalList}
           >
-            {mockHymns.slice(0, 6).map((hymn) => {
+            {featuredHymns.map((hymn) => {
               return (
                 <TouchableOpacity
                   key={hymn.id}
                   style={styles.hymnCard}
-                  onPress={() => navigation.navigate('HymnDetail', { hymn })}
+                  onPress={() => navigation.navigate('HymnDetail', { hymnId: hymn.id })}
                   activeOpacity={0.9}
                 >
                   <View style={[styles.hymnNumberWrap, { backgroundColor: colors.primaryLight }]}>
@@ -617,7 +630,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
                   <Text style={styles.hymnTitle} numberOfLines={2}>{hymn.title}</Text>
                   <View style={styles.hymnFooter}>
                     <View style={[styles.hymnCategoryWrap, { backgroundColor: colors.primaryLight }]}>
-                      <Text style={[styles.hymnCategory, { color: colors.primary }]}>{hymn.category}</Text>
+                      <Text style={[styles.hymnCategory, { color: colors.primary }]}>Cantique</Text>
                     </View>
                     <Ionicons name="play-circle" size={24} color={colors.primary} />
                   </View>
@@ -625,6 +638,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
               );
             })}
           </ScrollView>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

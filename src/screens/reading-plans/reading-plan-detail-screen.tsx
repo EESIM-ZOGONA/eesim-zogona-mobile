@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList, ReadingPlanDay } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { calculateProgress } from '../../data/reading-plans-data';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { useReadingPlans, useReadingProgress } from '../../hooks';
 
 interface ReadingPlanDetailScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ReadingPlanDetail'>;
@@ -23,47 +24,117 @@ interface ReadingPlanDetailScreenProps {
 }
 
 export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetailScreenProps) {
-  const { plan } = route.params;
-  const [completedDays, setCompletedDays] = useState<string[]>(plan.completedDays || []);
+  const { plan, userPlanId } = route.params;
+  const { startPlan, pausePlan, resumePlan, abandonPlan, refresh: refreshPlans } = useReadingPlans();
+  const [currentUserPlanId, setCurrentUserPlanId] = useState(userPlanId);
+  const [isStarting, setIsStarting] = useState(false);
 
-  const progress = calculateProgress({ ...plan, completedDays });
+  const hasUserPlan = !!currentUserPlanId;
 
-  const handleStartPlan = () => {
+  const {
+    progress,
+    allProgress,
+    loading,
+    isDayComplete,
+    refresh: refreshProgress
+  } = useReadingProgress({ userPlanId: currentUserPlanId || '' });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUserPlanId) {
+        refreshProgress();
+      }
+    }, [currentUserPlanId, refreshProgress])
+  );
+
+  const handleStartPlan = async () => {
     Alert.alert(
       'Commencer le plan',
       `Voulez-vous commencer "${plan.title}" ?`,
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Commencer', onPress: () => console.log('Starting plan:', plan.id) },
+        {
+          text: 'Commencer',
+          onPress: async () => {
+            setIsStarting(true);
+            try {
+              const userPlan = await startPlan(plan);
+              setCurrentUserPlanId(userPlan.id);
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de démarrer le plan');
+            } finally {
+              setIsStarting(false);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handlePausePlan = () => {
+    if (!currentUserPlanId) return;
+    Alert.alert(
+      'Mettre en pause',
+      'Voulez-vous mettre ce plan en pause ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Mettre en pause',
+          onPress: async () => {
+            await pausePlan(currentUserPlanId);
+            await refreshPlans();
+          }
+        },
+      ]
+    );
+  };
+
+  const handleResumePlan = async () => {
+    if (!currentUserPlanId) return;
+    await resumePlan(currentUserPlanId);
+    await refreshPlans();
+  };
+
+  const handleAbandonPlan = () => {
+    if (!currentUserPlanId) return;
+    Alert.alert(
+      'Abandonner le plan',
+      'Êtes-vous sûr de vouloir abandonner ce plan ? Votre progression sera perdue.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Abandonner',
+          style: 'destructive',
+          onPress: async () => {
+            await abandonPlan(currentUserPlanId);
+            setCurrentUserPlanId(undefined);
+            await refreshPlans();
+          }
+        },
       ]
     );
   };
 
   const handleDayPress = (day: ReadingPlanDay) => {
-    navigation.navigate('ReadingPlanDay', { plan, day });
-  };
-
-  const toggleDayComplete = (dayId: string) => {
-    setCompletedDays(prev =>
-      prev.includes(dayId) ? prev.filter(id => id !== dayId) : [...prev, dayId]
-    );
+    navigation.navigate(SCREENS.READING_PLAN_DAY, {
+      plan,
+      day,
+      userPlanId: currentUserPlanId
+    });
   };
 
   const renderDayItem = ({ item: day }: { item: ReadingPlanDay }) => {
-    const isCompleted = completedDays.includes(day.id);
+    const isCompleted = hasUserPlan && isDayComplete(day.day);
+
     return (
       <TouchableOpacity
         style={[styles.dayCard, isCompleted && styles.dayCardCompleted]}
         onPress={() => handleDayPress(day)}
         activeOpacity={0.8}
       >
-        <TouchableOpacity
-          style={[styles.dayCheckbox, isCompleted && styles.dayCheckboxCompleted]}
-          onPress={() => toggleDayComplete(day.id)}
-          activeOpacity={0.8}
-        >
+        <View style={[styles.dayCheckbox, isCompleted && styles.dayCheckboxCompleted]}>
           {isCompleted && <Ionicons name="checkmark" size={16} color="#fff" />}
-        </TouchableOpacity>
+        </View>
         <View style={styles.dayInfo}>
           <Text style={[styles.dayNumber, isCompleted && styles.dayNumberCompleted]}>
             Jour {day.day}
@@ -88,6 +159,17 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
     );
   };
 
+  if (isStarting) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Démarrage du plan...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
@@ -96,7 +178,6 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
         keyExtractor={(item) => item.id}
         ListHeaderComponent={() => (
           <>
-            {/* Hero Image */}
             <View style={styles.heroContainer}>
               <Image source={{ uri: plan.imageUrl }} style={styles.heroImage} />
               <LinearGradient
@@ -110,6 +191,27 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
               >
                 <Ionicons name="arrow-back" size={24} color="#fff" />
               </TouchableOpacity>
+
+              {hasUserPlan && (
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Options',
+                      undefined,
+                      [
+                        { text: 'Annuler', style: 'cancel' },
+                        { text: 'Mettre en pause', onPress: handlePausePlan },
+                        { text: 'Abandonner', style: 'destructive', onPress: handleAbandonPlan },
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
+                </TouchableOpacity>
+              )}
+
               <View style={styles.heroContent}>
                 <View style={styles.heroBadge}>
                   <Ionicons name="calendar" size={12} color={colors.primary} />
@@ -120,22 +222,28 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
               </View>
             </View>
 
-            {/* Progress Card */}
             <View style={styles.progressCard}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressTitle}>Votre progression</Text>
-                <Text style={styles.progressPercentage}>{progress.percentage}%</Text>
+                <Text style={styles.progressTitle}>
+                  {hasUserPlan ? 'Votre progression' : 'Aperçu du plan'}
+                </Text>
+                <Text style={styles.progressPercentage}>
+                  {hasUserPlan ? `${progress.percentage}%` : `${plan.duration} jours`}
+                </Text>
               </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
-              </View>
-              <Text style={styles.progressSubtext}>
-                {progress.completed} sur {progress.total} jours complétés
-              </Text>
+              {hasUserPlan && (
+                <>
+                  <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
+                  </View>
+                  <Text style={styles.progressSubtext}>
+                    {progress.completedDays} sur {progress.totalDays} jours complétés
+                  </Text>
+                </>
+              )}
             </View>
 
-            {/* Start Button */}
-            {!plan.startDate && (
+            {!hasUserPlan && (
               <TouchableOpacity
                 style={styles.startButton}
                 onPress={handleStartPlan}
@@ -146,7 +254,6 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
               </TouchableOpacity>
             )}
 
-            {/* Section Title */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Programme</Text>
               <Text style={styles.sectionSubtitle}>{plan.days.length} lectures</Text>
@@ -165,10 +272,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
   listContent: {
     paddingBottom: spacing.xxl,
   },
-  // Hero
   heroContainer: {
     height: 260,
     position: 'relative',
@@ -184,6 +301,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.md,
     left: spacing.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButton: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.lg,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -225,7 +353,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: 'rgba(255,255,255,0.9)',
   },
-  // Progress Card
   progressCard: {
     margin: spacing.xl,
     padding: spacing.lg,
@@ -265,7 +392,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.text.secondary,
   },
-  // Start Button
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -282,7 +408,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: '#fff',
   },
-  // Section Header
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -300,7 +425,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
   },
-  // Day Card
   dayCard: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,16 @@ import {
   TouchableOpacity,
   Share,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, NoteCategory } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { useNotes } from '../../hooks';
+import { RichTextRenderer } from '../../components/notes';
 
 interface NoteDetailScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NoteDetail'>;
@@ -29,8 +32,17 @@ const categoryConfig: Record<NoteCategory, { label: string; icon: keyof typeof I
 };
 
 export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
-  const { note } = route.params;
-  const [isFavorite, setIsFavorite] = useState(note.isFavorite || false);
+  const initialNote = route.params.note;
+  const { notes, deleteNote, toggleFavorite, refresh, loading } = useNotes();
+
+  const note = notes.find(n => n.id === initialNote.id) || initialNote;
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const config = categoryConfig[note.category];
 
@@ -47,7 +59,8 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
   };
 
   const handleShare = async () => {
-    let message = `${note.title}\n\n${note.content}`;
+    const plainContent = note.contentPlain || note.content;
+    let message = `${note.title}\n\n${plainContent}`;
     if (note.linkedVerseRef) {
       message += `\n\n📖 ${note.linkedVerseRef}`;
     }
@@ -63,23 +76,38 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            // TODO: Implement delete
-            navigation.goBack();
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await deleteNote(note.id);
+              navigation.goBack();
+            } catch (error) {
+              setIsDeleting(false);
+              Alert.alert('Erreur', 'Impossible de supprimer la note');
+            }
           },
         },
       ]
     );
   };
 
-  const toggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-    // TODO: Persist favorite state
+  const handleToggleFavorite = async () => {
+    await toggleFavorite(note.id);
   };
+
+  if (isDeleting) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Suppression...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -91,18 +119,18 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={toggleFavorite}
+            onPress={handleToggleFavorite}
             activeOpacity={0.7}
           >
             <Ionicons
-              name={isFavorite ? 'star' : 'star-outline'}
+              name={note.isFavorite ? 'star' : 'star-outline'}
               size={22}
-              color={isFavorite ? '#fbbf24' : colors.text.primary}
+              color={note.isFavorite ? '#fbbf24' : colors.text.primary}
             />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => navigation.navigate('NoteEdit', { note })}
+            onPress={() => navigation.navigate(SCREENS.NOTE_EDIT, { note })}
             activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={22} color={colors.text.primary} />
@@ -122,19 +150,15 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Category Badge */}
         <View style={[styles.categoryBadge, { backgroundColor: `${config.color}15` }]}>
           <Ionicons name={config.icon} size={14} color={config.color} />
           <Text style={[styles.categoryText, { color: config.color }]}>{config.label}</Text>
         </View>
 
-        {/* Title */}
         <Text style={styles.title}>{note.title}</Text>
 
-        {/* Date */}
         <Text style={styles.date}>{formatDate(note.updatedAt)}</Text>
 
-        {/* Linked Verse */}
         {note.linkedVerseRef && (
           <View style={styles.verseRefCard}>
             <Ionicons name="book" size={20} color={colors.primary} />
@@ -142,13 +166,11 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
           </View>
         )}
 
-        {/* Content */}
         <View style={styles.contentCard}>
-          <Text style={styles.content}>{note.content}</Text>
+          <RichTextRenderer html={note.content} baseFontSize={fontSize.md} />
         </View>
       </ScrollView>
 
-      {/* Bottom Actions */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.actionButton}
@@ -160,7 +182,7 @@ export function NoteDetailScreen({ navigation, route }: NoteDetailScreenProps) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButtonPrimary]}
-          onPress={() => navigation.navigate('NoteEdit', { note })}
+          onPress={() => navigation.navigate(SCREENS.NOTE_EDIT, { note })}
           activeOpacity={0.8}
         >
           <Ionicons name="create" size={20} color="#fff" />
@@ -175,6 +197,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
   },
   header: {
     flexDirection: 'row',
@@ -210,7 +243,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
-  // Category
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -225,21 +257,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontFamily: fontFamily.semibold,
   },
-  // Title
   title: {
     fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
     marginBottom: spacing.sm,
   },
-  // Date
   date: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
     marginBottom: spacing.lg,
   },
-  // Verse Reference
   verseRefCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -254,7 +283,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: colors.primary,
   },
-  // Content
   contentCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
@@ -266,7 +294,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 28,
   },
-  // Bottom Bar
   bottomBar: {
     flexDirection: 'row',
     gap: spacing.md,

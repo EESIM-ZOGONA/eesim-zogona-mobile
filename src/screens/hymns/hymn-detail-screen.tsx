@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -6,24 +6,47 @@ import {
   ScrollView,
   TouchableOpacity,
   Share,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { SCREENS } from '../../constants/screens';
+import { useHymns } from '../../hooks';
+import { HymnWithDetails, Hymn } from '../../services/hymns-database';
+
+const { width, height } = Dimensions.get('window');
+const SWIPE_THRESHOLD = width * 0.3;
+
+const NUM_COLUMNS = 6;
+const GRID_PADDING = 16;
+const CIRCLE_GAP = 12;
+const TOTAL_GAPS = (NUM_COLUMNS - 1) * CIRCLE_GAP + (GRID_PADDING * 2);
+const CIRCLE_SIZE = Math.floor((width - TOTAL_GAPS) / NUM_COLUMNS);
 
 interface HymnDetailScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'HymnDetail'>;
   route: RouteProp<RootStackParamList, 'HymnDetail'>;
 }
 
-// Parse lyrics into sections (REFRAIN, COUPLET 1, etc.)
 const parseLyrics = (lyrics: string) => {
   const sections: { type: 'refrain' | 'couplet' | 'refrain-ref'; title?: string; content: string }[] = [];
-
-  // Split by common section markers
   const lines = lyrics.split('\n');
   let currentSection: { type: 'refrain' | 'couplet' | 'refrain-ref'; title?: string; content: string } | null = null;
 
@@ -31,7 +54,6 @@ const parseLyrics = (lyrics: string) => {
     const trimmedLine = line.trim();
     const upperLine = trimmedLine.toUpperCase();
 
-    // Check for section headers
     if (upperLine.startsWith('REFRAIN') || upperLine === 'REFRAIN:' || upperLine === 'REFRAIN') {
       if (currentSection) sections.push(currentSection);
       currentSection = { type: 'refrain', title: 'REFRAIN', content: '' };
@@ -45,7 +67,6 @@ const parseLyrics = (lyrics: string) => {
       currentSection = null;
     } else if (trimmedLine) {
       if (!currentSection) {
-        // Start with couplet 1 if no header
         currentSection = { type: 'couplet', title: 'COUPLET 1', content: '' };
       }
       currentSection.content += (currentSection.content ? '\n' : '') + trimmedLine;
@@ -54,7 +75,6 @@ const parseLyrics = (lyrics: string) => {
 
   if (currentSection) sections.push(currentSection);
 
-  // If no sections found, treat as single block
   if (sections.length === 0) {
     return [{ type: 'couplet' as const, content: lyrics }];
   }
@@ -62,15 +82,162 @@ const parseLyrics = (lyrics: string) => {
   return sections;
 };
 
+const FONT_SIZES = [16, 18, 20, 22, 24, 28];
+const LINE_HEIGHTS = [26, 30, 34, 38, 42, 48];
+const DEFAULT_SIZE_INDEX = 2;
+
+const ROW_HEIGHT = CIRCLE_SIZE + CIRCLE_GAP;
+
+interface HymnNavItemProps {
+  number: number;
+  isActive: boolean;
+  onPress: () => void;
+}
+
+const HymnNavItem = memo(({ number, isActive, onPress }: HymnNavItemProps) => (
+  <TouchableOpacity
+    style={[styles.hymnNavItem, isActive && styles.hymnNavItemActive]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.hymnNavItemText, isActive && styles.hymnNavItemTextActive]}>
+      {number}
+    </Text>
+  </TouchableOpacity>
+));
+
 export function HymnDetailScreen({ navigation, route }: HymnDetailScreenProps) {
   const insets = useSafeAreaInsets();
-  const { hymn } = route.params;
-  const [textSize, setTextSize] = useState(18);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const { hymnId } = route.params;
+  const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_SIZE_INDEX);
+  const [hymn, setHymn] = useState<HymnWithDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showHymnPicker, setShowHymnPicker] = useState(false);
+  const [showFontControls, setShowFontControls] = useState(false);
 
-  const sections = parseLyrics(hymn.lyrics);
+  const { hymns, getHymn, toggleFavorite, addToRecentlyPlayed } = useHymns();
+
+  const translateX = useSharedValue(0);
+  const rotateY = useSharedValue(0);
+  const hymnModalY = useSharedValue(-height * 0.6);
+  const hymnModalOpacity = useSharedValue(0);
+
+  const currentIndex = hymns.findIndex(h => h.id === hymnId);
+  const isFirstHymn = currentIndex <= 0;
+  const isLastHymn = currentIndex >= hymns.length - 1;
+  const totalHymns = hymns.length;
+  const currentFontSize = FONT_SIZES[fontSizeIndex];
+  const currentLineHeight = LINE_HEIGHTS[fontSizeIndex];
+
+  useEffect(() => {
+    const loadHymn = async () => {
+      setLoading(true);
+      const hymnData = await getHymn(hymnId);
+      setHymn(hymnData);
+      setLoading(false);
+      if (hymnData) {
+        addToRecentlyPlayed(hymnId);
+      }
+    };
+    loadHymn();
+  }, [hymnId, getHymn, addToRecentlyPlayed]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!hymn) return;
+    const newFavoriteState = await toggleFavorite(hymn.id);
+    setHymn(prev => prev ? { ...prev, isFavorite: newFavoriteState } : null);
+  }, [hymn, toggleFavorite]);
+
+  const goToPrevHymn = useCallback(() => {
+    if (isFirstHymn || currentIndex < 0) return;
+    const prevHymn = hymns[currentIndex - 1];
+    navigation.replace(SCREENS.HYMN_DETAIL, { hymnId: prevHymn.id });
+  }, [isFirstHymn, currentIndex, hymns, navigation]);
+
+  const goToNextHymn = useCallback(() => {
+    if (isLastHymn || currentIndex < 0) return;
+    const nextHymn = hymns[currentIndex + 1];
+    navigation.replace(SCREENS.HYMN_DETAIL, { hymnId: nextHymn.id });
+  }, [isLastHymn, currentIndex, hymns, navigation]);
+
+  const goToHymn = useCallback((targetHymn: Hymn) => {
+    closeHymnModal();
+    if (targetHymn.id !== hymnId) {
+      setTimeout(() => {
+        navigation.replace(SCREENS.HYMN_DETAIL, { hymnId: targetHymn.id });
+      }, 150);
+    }
+  }, [hymnId, navigation]);
+
+  const openHymnModal = () => {
+    setShowHymnPicker(true);
+    hymnModalY.value = withTiming(0, { duration: 150 });
+    hymnModalOpacity.value = withTiming(1, { duration: 100 });
+  };
+
+  const closeHymnModal = () => {
+    hymnModalY.value = withTiming(-height * 0.6, { duration: 120 });
+    hymnModalOpacity.value = withTiming(0, { duration: 100 }, () => {
+      runOnJS(setShowHymnPicker)(false);
+    });
+  };
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .onUpdate((event) => {
+      if (event.translationX > 0 && isFirstHymn) {
+        translateX.value = event.translationX * 0.2;
+      } else if (event.translationX < 0 && isLastHymn) {
+        translateX.value = event.translationX * 0.2;
+      } else {
+        translateX.value = event.translationX;
+      }
+
+      rotateY.value = interpolate(
+        event.translationX,
+        [-width, 0, width],
+        [45, 0, -45],
+        Extrapolation.CLAMP
+      );
+    })
+    .onEnd((event) => {
+      const shouldNavigateNext = event.translationX < -SWIPE_THRESHOLD && !isLastHymn;
+      const shouldNavigatePrev = event.translationX > SWIPE_THRESHOLD && !isFirstHymn;
+
+      if (shouldNavigateNext) {
+        translateX.value = withTiming(-width, { duration: 300 }, () => {
+          runOnJS(goToNextHymn)();
+        });
+        rotateY.value = withTiming(90, { duration: 300 });
+      } else if (shouldNavigatePrev) {
+        translateX.value = withTiming(width, { duration: 300 }, () => {
+          runOnJS(goToPrevHymn)();
+        });
+        rotateY.value = withTiming(-90, { duration: 300 });
+      } else {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+        rotateY.value = withSpring(0, { damping: 20, stiffness: 200 });
+      }
+    });
+
+  const animatedPageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1000 },
+      { translateX: translateX.value },
+      { rotateY: `${rotateY.value}deg` },
+    ],
+  }));
+
+  const animatedHymnModalStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: hymnModalY.value }],
+  }));
+
+  const animatedHymnOverlayStyle = useAnimatedStyle(() => ({
+    opacity: hymnModalOpacity.value,
+  }));
 
   const handleShare = async () => {
+    if (!hymn) return;
     try {
       await Share.share({
         title: `Cantique ${hymn.number} - ${hymn.title}`,
@@ -81,145 +248,275 @@ export function HymnDetailScreen({ navigation, route }: HymnDetailScreenProps) {
     }
   };
 
-  const increaseTextSize = () => {
-    if (textSize < 28) setTextSize(textSize + 2);
+  const increaseFontSize = () => {
+    setFontSizeIndex(prev => Math.min(prev + 1, FONT_SIZES.length - 1));
   };
 
-  const decreaseTextSize = () => {
-    if (textSize > 14) setTextSize(textSize - 2);
+  const decreaseFontSize = () => {
+    setFontSizeIndex(prev => Math.max(prev - 1, 0));
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hymn) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.text.tertiary} />
+          <Text style={styles.loadingText}>Cantique introuvable</Text>
+          <TouchableOpacity
+            style={styles.backButtonCenter}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const sections = parseLyrics(hymn.lyrics);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header - Style paramètres */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={styles.headerButton}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{hymn.title}</Text>
-          <Text style={styles.headerSubtitle}>Cantique {hymn.number}</Text>
+
+        <View style={styles.headerCenterWrap}>
+          <TouchableOpacity
+            style={styles.headerHymnBtn}
+            onPress={openHymnModal}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.headerTitle}>Cantique {hymn.number}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.primary} />
+          </TouchableOpacity>
         </View>
+
         <TouchableOpacity
-          style={[styles.headerButton, isFavorite && styles.headerButtonActive]}
-          onPress={() => setIsFavorite(!isFavorite)}
+          style={styles.headerButton}
+          onPress={() => setShowFontControls(!showFontControls)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="text" size={20} color={showFontControls ? colors.primary : colors.text.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.pageContainer, animatedPageStyle]}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.hymnHeader}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.hymnAccent}
+              />
+              <Text style={styles.hymnTitle}>{hymn.title}</Text>
+              {(hymn.author || hymn.composer) && (
+                <Text style={styles.hymnMeta}>
+                  {hymn.author}{hymn.composer && hymn.composer !== hymn.author ? ` • ${hymn.composer}` : ''}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.lyricsCard}>
+              {sections.map((section, index) => (
+                <View key={index} style={styles.section}>
+                  {section.type === 'refrain' && (
+                    <>
+                      <Text style={styles.sectionTitle}>{section.title}</Text>
+                      <View style={styles.refrainContainer}>
+                        <View style={styles.refrainBar} />
+                        <Text style={[styles.refrainText, { fontSize: currentFontSize, lineHeight: currentLineHeight }]}>
+                          {section.content}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                  {section.type === 'couplet' && (
+                    <>
+                      {section.title && <Text style={styles.sectionTitle}>{section.title}</Text>}
+                      <Text style={[styles.coupletText, { fontSize: currentFontSize, lineHeight: currentLineHeight }]}>
+                        {section.content}
+                      </Text>
+                    </>
+                  )}
+                  {section.type === 'refrain-ref' && (
+                    <View style={styles.refrainRefContainer}>
+                      <View style={styles.refrainRefBar} />
+                      <Text style={styles.refrainRefText}>(Refrain)</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.swipeHint}>
+              <Ionicons name="swap-horizontal" size={16} color={colors.text.tertiary} />
+              <Text style={styles.swipeHintText}>Glissez pour changer de cantique</Text>
+            </View>
+
+            <View style={{ height: 120 }} />
+          </ScrollView>
+        </Animated.View>
+      </GestureDetector>
+
+      {showFontControls && (
+        <View style={styles.fontFloating}>
+          <TouchableOpacity
+            style={styles.fontFloatingClose}
+            onPress={() => setShowFontControls(false)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={18} color={colors.text.tertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fontFloatingBtn, fontSizeIndex === FONT_SIZES.length - 1 && styles.fontFloatingBtnDisabled]}
+            onPress={increaseFontSize}
+            disabled={fontSizeIndex === FONT_SIZES.length - 1}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={22} color={fontSizeIndex === FONT_SIZES.length - 1 ? colors.text.tertiary : colors.primary} />
+          </TouchableOpacity>
+          <View style={styles.fontFloatingIndicator}>
+            <Text style={styles.fontFloatingText}>{currentFontSize}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.fontFloatingBtn, fontSizeIndex === 0 && styles.fontFloatingBtnDisabled]}
+            onPress={decreaseFontSize}
+            disabled={fontSizeIndex === 0}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="remove" size={22} color={fontSizeIndex === 0 ? colors.text.tertiary : colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom || spacing.lg }]}>
+        <TouchableOpacity
+          style={[styles.navBtn, isFirstHymn && styles.navBtnDisabled]}
+          onPress={goToPrevHymn}
+          disabled={isFirstHymn}
           activeOpacity={0.7}
         >
           <Ionicons
-            name={isFavorite ? 'heart' : 'heart-outline'}
+            name="chevron-back"
             size={22}
-            color={isFavorite ? '#dc2626' : colors.text.primary}
+            color={isFirstHymn ? colors.text.tertiary : colors.primary}
+          />
+          {!isFirstHymn && (
+            <Text style={styles.navBtnText} numberOfLines={1}>
+              N° {hymns[currentIndex - 1]?.number}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.navCenterGroup}>
+          <TouchableOpacity
+            style={[styles.navActionBtn, hymn.isFavorite && styles.navActionBtnActive]}
+            onPress={handleToggleFavorite}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={hymn.isFavorite ? 'heart' : 'heart-outline'}
+              size={20}
+              color={hymn.isFavorite ? '#dc2626' : colors.text.secondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navCenterBtn}
+            onPress={openHymnModal}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="musical-notes" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navActionBtn}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.navBtn, styles.navBtnRight, isLastHymn && styles.navBtnDisabled]}
+          onPress={goToNextHymn}
+          disabled={isLastHymn}
+          activeOpacity={0.7}
+        >
+          {!isLastHymn && (
+            <Text style={styles.navBtnText} numberOfLines={1}>
+              N° {hymns[currentIndex + 1]?.number}
+            </Text>
+          )}
+          <Ionicons
+            name="chevron-forward"
+            size={22}
+            color={isLastHymn ? colors.text.tertiary : colors.primary}
           />
         </TouchableOpacity>
       </View>
 
-      {/* Category & Author */}
-      <View style={styles.metaRow}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{hymn.category}</Text>
-        </View>
-        {hymn.author && (
-          <Text style={styles.authorText}>{hymn.author}</Text>
-        )}
-      </View>
-
-      {/* Lyrics */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.lyricsCard}>
-          {sections.map((section, index) => (
-            <View key={index} style={styles.section}>
-              {section.type === 'refrain' && (
-                <>
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                  <View style={styles.refrainContainer}>
-                    <View style={styles.refrainBar} />
-                    <Text style={[styles.refrainText, { fontSize: textSize, lineHeight: textSize * 1.6 }]}>
-                      {section.content}
-                    </Text>
-                  </View>
-                </>
-              )}
-              {section.type === 'couplet' && (
-                <>
-                  {section.title && <Text style={styles.sectionTitle}>{section.title}</Text>}
-                  <Text style={[styles.coupletText, { fontSize: textSize, lineHeight: textSize * 1.6 }]}>
-                    {section.content}
-                  </Text>
-                </>
-              )}
-              {section.type === 'refrain-ref' && (
-                <View style={styles.refrainRefContainer}>
-                  <View style={styles.refrainRefBar} />
-                  <Text style={styles.refrainRefText}>(Refrain)</Text>
-                </View>
-              )}
+      {showHymnPicker && (
+        <>
+          <Animated.View style={[styles.modalOverlay, animatedHymnOverlayStyle]}>
+            <TouchableOpacity
+              style={styles.overlayTouchable}
+              activeOpacity={1}
+              onPress={closeHymnModal}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.hymnModal, animatedHymnModalStyle]}>
+            <View style={styles.navModalHeader}>
+              <Text style={styles.navModalTitle}>Choisir un cantique</Text>
+              <TouchableOpacity onPress={closeHymnModal}>
+                <Ionicons name="close" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      </ScrollView>
-
-      {/* Bottom Floating Bar */}
-      <View style={[styles.floatingBar, { paddingBottom: insets.bottom || spacing.md }]}>
-        <View style={styles.floatingBarContent}>
-          {/* Play Button */}
-          <TouchableOpacity style={styles.playButton} activeOpacity={0.8}>
-            <Ionicons name="play" size={28} color="#fff" style={{ marginLeft: 3 }} />
-          </TouchableOpacity>
-
-          {/* Audio Info */}
-          <View style={styles.audioInfo}>
-            <Text style={styles.audioTitle}>Melodie</Text>
-            <Text style={styles.audioSubtitle}>Piano - 3:45</Text>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.barDivider} />
-
-          {/* Actions */}
-          <TouchableOpacity
-            style={styles.barActionButton}
-            onPress={handleShare}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="share-social-outline" size={22} color={colors.text.secondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.barActionButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="options-outline" size={22} color={colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Size Controls Row */}
-        <View style={styles.sizeControlsRow}>
-          <TouchableOpacity
-            style={styles.sizeControlButton}
-            onPress={decreaseTextSize}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.sizeControlText}>A-</Text>
-          </TouchableOpacity>
-          <View style={styles.sizeIndicator}>
-            <Text style={styles.sizeIndicatorText}>{textSize}px</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.sizeControlButton}
-            onPress={increaseTextSize}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.sizeControlTextLarge}>A+</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <Text style={styles.navModalSubtitle}>{totalHymns} cantiques disponibles</Text>
+            <FlatList
+              data={hymns}
+              keyExtractor={(item) => item.id}
+              numColumns={NUM_COLUMNS}
+              columnWrapperStyle={styles.navRow}
+              contentContainerStyle={styles.navGrid}
+              windowSize={5}
+              maxToRenderPerBatch={30}
+              initialNumToRender={42}
+              removeClippedSubviews={true}
+              renderItem={({ item }) => (
+                <HymnNavItem
+                  number={item.number}
+                  isActive={item.id === hymnId}
+                  onPress={() => goToHymn(item)}
+                />
+              )}
+            />
+          </Animated.View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -227,123 +524,94 @@ export function HymnDetailScreen({ navigation, route }: HymnDetailScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FAFAFA',
   },
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
-    flex: 1,
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
+  backButtonCenter: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+  },
+  backButtonText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    zIndex: 10,
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenterWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerHymnBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
   },
   headerTitle: {
     fontSize: fontSize.lg,
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
   },
-  headerSubtitle: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
+  pageContainer: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerButtonActive: {
-    backgroundColor: '#fee2e2',
-  },
-  // Controls Row
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  categoryWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  categoryBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-  },
-  categoryText: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.semibold,
-    color: colors.primary,
-    textTransform: 'capitalize',
-  },
-  authorText: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.regular,
-    color: colors.text.secondary,
-  },
-  textSizeControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-  },
-  sizeButton: {
-    width: 44,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sizeButtonText: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.secondary,
-  },
-  sizeButtonTextLarge: {
-    fontSize: fontSize.lg,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-  },
-  sizeDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border,
-  },
-  // Lyrics
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 120,
+    paddingTop: spacing.md,
+  },
+  hymnHeader: {
+    marginBottom: spacing.xl,
+    paddingLeft: spacing.md,
+  },
+  hymnAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderRadius: 2,
+  },
+  hymnTitle: {
+    fontSize: fontSize.xxl,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  hymnMeta: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.text.tertiary,
   },
   lyricsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingHorizontal: spacing.sm,
   },
   section: {
     marginBottom: spacing.xl,
@@ -392,139 +660,196 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: colors.text.secondary,
   },
-  // Audio Bar
-  audioBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  audioBarContent: {
+  swipeHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.full,
-    padding: spacing.sm,
-    paddingRight: spacing.md,
-  },
-  playButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    gap: spacing.xs,
+    paddingVertical: spacing.lg,
+    marginTop: spacing.md,
   },
-  audioInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  audioTitle: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.primary,
-  },
-  audioSubtitle: {
+  swipeHintText: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.regular,
-    color: colors.text.secondary,
+    color: colors.text.tertiary,
   },
-  audioActions: {
+  fontFloating: {
+    position: 'absolute',
+    right: spacing.lg,
+    top: 120,
+    backgroundColor: '#fff',
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 20,
+  },
+  fontFloatingClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  fontFloatingBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fontFloatingBtnDisabled: {
+    opacity: 0.4,
+  },
+  fontFloatingIndicator: {
+    paddingVertical: spacing.xs,
+  },
+  fontFloatingText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  navBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.lg,
+    minWidth: 90,
+  },
+  navBtnRight: {
+    justifyContent: 'flex-end',
+  },
+  navBtnDisabled: {
+    backgroundColor: 'transparent',
+  },
+  navBtnText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: colors.primary,
+  },
+  navCenterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  audioActionButton: {
-    width: 44,
-    height: 44,
+  navCenterBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Meta Row
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
-  },
-  // Floating Bar
-  floatingBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  floatingBarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.full,
-    padding: spacing.sm,
-    paddingRight: spacing.md,
-  },
-  barDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.sm,
-  },
-  barActionButton: {
+  navActionBtn: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Size Controls
-  sizeControlsRow: {
+  navActionBtnActive: {
+    backgroundColor: '#fee2e2',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 100,
+  },
+  overlayTouchable: {
+    flex: 1,
+  },
+  hymnModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xl,
+    maxHeight: height * 0.6,
+    paddingTop: 60,
+    paddingBottom: spacing.lg,
+    zIndex: 101,
+  },
+  navModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.sm,
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  sizeControlButton: {
-    width: 44,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-  },
-  sizeControlText: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.secondary,
-  },
-  sizeControlTextLarge: {
+  navModalTitle: {
     fontSize: fontSize.lg,
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
   },
-  sizeIndicator: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.full,
-  },
-  sizeIndicatorText: {
+  navModalSubtitle: {
     fontSize: fontSize.sm,
-    fontFamily: fontFamily.medium,
+    fontFamily: fontFamily.regular,
+    color: colors.text.tertiary,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  navGrid: {
+    paddingHorizontal: GRID_PADDING,
+    paddingVertical: spacing.md,
+  },
+  navRow: {
+    justifyContent: 'flex-start',
+    gap: CIRCLE_GAP,
+    marginBottom: CIRCLE_GAP,
+  },
+  hymnNavItem: {
+    width: CIRCLE_SIZE,
+    height: CIRCLE_SIZE,
+    backgroundColor: '#fff',
+    borderRadius: CIRCLE_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  hymnNavItemActive: {
+    backgroundColor: colors.primary,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  hymnNavItemText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.bold,
     color: colors.primary,
+  },
+  hymnNavItemTextActive: {
+    color: '#fff',
   },
 });

@@ -8,7 +8,7 @@ import {
   FlatList,
   Dimensions,
   ActivityIndicator,
-  Modal,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,16 +20,15 @@ import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '..
 import {
   initBibleDatabase,
   getAllBooks,
-  getBooksByTestament as getBooksByTestamentDB,
   getDailyVerse as getDailyVerseDB,
-  BIBLE_BOOKS,
+  searchVerses,
   BibleSearchResult,
   BIBLE_VERSIONS,
   BibleVersionCode,
   getCurrentVersion,
   setCurrentVersion,
-  getCurrentVersionInfo,
 } from '../../services/bible-database';
+import { BibleVersionPicker, VerseSearchList } from '../../components/bible';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.md) / 2;
@@ -38,10 +37,15 @@ interface BibleScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Bible'>;
 }
 
+type SearchMode = 'books' | 'verses';
+
 export function BibleScreen({ navigation }: BibleScreenProps) {
   const [activeTestament, setActiveTestament] = useState<'old' | 'new'>('old');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<SearchMode>('books');
+  const [verseResults, setVerseResults] = useState<BibleSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [dailyVerse, setDailyVerse] = useState<BibleSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [allBooks, setAllBooks] = useState<BibleBook[]>([]);
@@ -81,8 +85,28 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
     return BIBLE_VERSIONS.find(v => v.code === selectedVersion) || BIBLE_VERSIONS[0];
   }, [selectedVersion]);
 
+  const performVerseSearch = useCallback(async (query: string) => {
+    if (query.length < 3) {
+      setVerseResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const results = await searchVerses(query, 100);
+      setVerseResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setVerseResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
   const debouncedSearch = useDebouncedCallback((value: string) => {
     setSearchQuery(value);
+    if (searchMode === 'verses') {
+      performVerseSearch(value);
+    }
   }, 300);
 
   const handleSearchChange = useCallback((text: string) => {
@@ -93,7 +117,27 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
   const clearSearch = useCallback(() => {
     setSearchInput('');
     setSearchQuery('');
+    setVerseResults([]);
+    Keyboard.dismiss();
   }, []);
+
+  const handleSearchModeChange = useCallback((mode: SearchMode) => {
+    setSearchMode(mode);
+    if (mode === 'verses' && searchQuery.length >= 3) {
+      performVerseSearch(searchQuery);
+    } else if (mode === 'books') {
+      setVerseResults([]);
+    }
+  }, [searchQuery, performVerseSearch]);
+
+  const handleVersePress = useCallback((result: BibleSearchResult) => {
+    navigation.navigate(SCREENS.BIBLE_CHAPTER, {
+      bookId: result.bookId,
+      bookName: result.bookName,
+      chapter: result.chapter,
+      scrollToVerse: result.verse,
+    });
+  }, [navigation]);
 
   // Filtrer les livres
   const filteredBooks = useMemo(() => {
@@ -117,6 +161,8 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
       allBooks.find(b => b.abbrev === 'Rom'),
     ].filter(Boolean) as BibleBook[];
   }, [allBooks]);
+
+  const isShowingVerseResults = searchMode === 'verses' && searchQuery.length >= 3;
 
   if (isLoading) {
     return (
@@ -170,42 +216,105 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* Header amélioré */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={styles.headerCenter}
+          style={styles.versionButton}
           onPress={() => setShowVersionModal(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.headerTitle}>La Bible</Text>
-          <View style={styles.versionSelector}>
-            <Text style={styles.headerSubtitle}>{currentVersionInfo.name}</Text>
-            <Ionicons name="chevron-down" size={14} color={colors.text.secondary} />
+          <View style={styles.versionBadge}>
+            <Text style={styles.versionCode}>{selectedVersion}</Text>
           </View>
+          <Ionicons name="chevron-down" size={16} color={colors.primary} />
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={styles.settingsButton}
+          style={styles.bookmarkButton}
           activeOpacity={0.7}
         >
           <Ionicons name="bookmark-outline" size={22} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={filteredBooks}
-        renderItem={renderBookListItem}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={() => (
-          <>
-            {/* Daily Verse Hero */}
-            {dailyVerse && (
+      {/* Search Bar améliorée */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchInputWrap}>
+          <Ionicons name="search" size={20} color={colors.text.tertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={searchMode === 'books' ? "Rechercher un livre..." : "Rechercher dans les versets..."}
+            placeholderTextColor={colors.text.tertiary}
+            value={searchInput}
+            onChangeText={handleSearchChange}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchInput.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Mode de recherche */}
+        <View style={styles.searchModeContainer}>
+          <TouchableOpacity
+            style={[styles.searchModeBtn, searchMode === 'books' && styles.searchModeBtnActive]}
+            onPress={() => handleSearchModeChange('books')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="book-outline"
+              size={16}
+              color={searchMode === 'books' ? colors.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.searchModeText, searchMode === 'books' && styles.searchModeTextActive]}>
+              Livres
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.searchModeBtn, searchMode === 'verses' && styles.searchModeBtnActive]}
+            onPress={() => handleSearchModeChange('verses')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="text-outline"
+              size={16}
+              color={searchMode === 'verses' ? colors.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.searchModeText, searchMode === 'verses' && styles.searchModeTextActive]}>
+              Versets
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Résultats de recherche de versets */}
+      {isShowingVerseResults ? (
+        <VerseSearchList
+          results={verseResults}
+          searchQuery={searchQuery}
+          isSearching={isSearching}
+          onVersePress={handleVersePress}
+        />
+      ) : (
+        <FlatList
+          data={filteredBooks}
+          renderItem={renderBookListItem}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={() => (
+            <>
+              {/* Daily Verse Hero */}
+              {dailyVerse && !searchQuery && (
               <TouchableOpacity
                 activeOpacity={0.95}
                 onPress={() => {
@@ -240,27 +349,6 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
                 </LinearGradient>
               </TouchableOpacity>
             )}
-
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputWrap}>
-                <Ionicons name="search" size={20} color={colors.text.tertiary} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Rechercher un livre..."
-                  placeholderTextColor={colors.text.tertiary}
-                  value={searchInput}
-                  onChangeText={handleSearchChange}
-                  autoCorrect={false}
-                  returnKeyType="search"
-                />
-                {searchInput.length > 0 && (
-                  <TouchableOpacity onPress={clearSearch}>
-                    <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
 
             {/* Quick Access */}
             {!searchQuery && (
@@ -329,52 +417,14 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+      )}
 
-      <Modal
+      <BibleVersionPicker
         visible={showVersionModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowVersionModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowVersionModal(false)}
-        >
-          <View style={styles.versionModalContent}>
-            <View style={styles.versionModalHeader}>
-              <Text style={styles.versionModalTitle}>Version de la Bible</Text>
-              <TouchableOpacity onPress={() => setShowVersionModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            {BIBLE_VERSIONS.map((version) => (
-              <TouchableOpacity
-                key={version.code}
-                style={[
-                  styles.versionOption,
-                  selectedVersion === version.code && styles.versionOptionActive,
-                ]}
-                onPress={() => handleVersionChange(version.code)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.versionOptionInfo}>
-                  <Text style={[
-                    styles.versionOptionName,
-                    selectedVersion === version.code && styles.versionOptionNameActive,
-                  ]}>
-                    {version.name}
-                  </Text>
-                  <Text style={styles.versionOptionCode}>{version.shortName}</Text>
-                </View>
-                {selectedVersion === version.code && (
-                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        currentVersion={selectedVersion}
+        onSelectVersion={handleVersionChange}
+        onClose={() => setShowVersionModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -392,31 +442,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
+  versionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
   },
-  headerTitle: {
-    fontSize: fontSize.xl,
+  versionBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+  },
+  versionCode: {
+    fontSize: fontSize.sm,
     fontFamily: fontFamily.bold,
-    color: colors.text.primary,
+    color: '#fff',
   },
-  headerSubtitle: {
-    fontSize: fontSize.xs,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  bookmarkButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -492,8 +548,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   // Search
-  searchContainer: {
-    marginBottom: spacing.lg,
+  searchSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   searchInputWrap: {
     flexDirection: 'row',
@@ -510,6 +568,34 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.text.primary,
     paddingVertical: spacing.xs,
+  },
+  searchModeContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  searchModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  searchModeBtnActive: {
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  searchModeText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.text.tertiary,
+  },
+  searchModeTextActive: {
+    color: colors.primary,
+    fontFamily: fontFamily.semibold,
   },
   // Quick Access
   quickAccessScroll: {
@@ -676,66 +762,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: fontSize.md,
     fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
-  },
-  versionSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  versionModalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    width: '100%',
-    maxWidth: 400,
-  },
-  versionModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  versionModalTitle: {
-    fontSize: fontSize.xl,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-  },
-  versionOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.xs,
-  },
-  versionOptionActive: {
-    backgroundColor: colors.primaryLight,
-  },
-  versionOptionInfo: {
-    flex: 1,
-  },
-  versionOptionName: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  versionOptionNameActive: {
-    color: colors.primary,
-  },
-  versionOptionCode: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
   },
 });

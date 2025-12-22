@@ -97,7 +97,7 @@ export function MyFavoritesScreen({ navigation }: MyFavoritesScreenProps) {
   const renderHymn = ({ item, index }: { item: Hymn; index: number }) => (
     <TouchableOpacity
       style={styles.hymnCard}
-      onPress={() => navigation.navigate('HymnDetail', { hymn: item })}
+      onPress={() => navigation.navigate('HymnDetail', { hymnId: item.id })}
       activeOpacity={0.9}
     >
       <LinearGradient

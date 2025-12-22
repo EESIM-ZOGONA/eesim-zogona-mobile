@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@10play/tentap-editor": "^1.0.1",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/open-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
@@ -31,6 +32,7 @@
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-confetti-cannon": "^1.5.2",
     "react-native-gesture-handler": "^2.28.0",
     "react-native-reanimated": "^4.1.6",
     "react-native-safe-area-context": "^5.6.2",

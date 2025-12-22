@@ -1,21 +1,20 @@
-import React, { useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-
-const { width } = Dimensions.get('window');
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { useReadingProgress } from '../../hooks';
 
 interface ReadingPlanDayScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ReadingPlanDay'>;
@@ -23,28 +22,66 @@ interface ReadingPlanDayScreenProps {
 }
 
 export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreenProps) {
-  const { plan, day } = route.params;
-  const [completedReadings, setCompletedReadings] = useState<string[]>([]);
+  const { plan, day, userPlanId } = route.params;
 
-  const allReadingsComplete = completedReadings.length === day.readings.length;
+  const hasUserPlan = !!userPlanId;
 
-  const toggleReading = (readingIndex: number) => {
-    const key = `${day.id}-${readingIndex}`;
-    setCompletedReadings(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
+  const {
+    isReadingComplete,
+    isDayComplete,
+    markReadingComplete,
+    markDayComplete,
+    refresh
+  } = useReadingProgress({ userPlanId: userPlanId || '' });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userPlanId) {
+        refresh();
+      }
+    }, [userPlanId, refresh])
+  );
+
+  const completedReadingsCount = hasUserPlan
+    ? day.readings.filter((_, i) => isReadingComplete(day.day, i)).length
+    : 0;
+
+  const allReadingsComplete = completedReadingsCount === day.readings.length;
+  const dayAlreadyComplete = hasUserPlan && isDayComplete(day.day);
+
+  const toggleReading = async (readingIndex: number) => {
+    if (!hasUserPlan) {
+      Alert.alert(
+        'Plan non démarré',
+        'Vous devez d\'abord commencer ce plan pour suivre votre progression.'
+      );
+      return;
+    }
+
+    if (!isReadingComplete(day.day, readingIndex)) {
+      await markReadingComplete(day.day, readingIndex);
+    }
   };
 
-  const handleMarkComplete = () => {
-    // TODO: Persist completion and go back
+  const handleMarkComplete = async () => {
+    if (!hasUserPlan) {
+      Alert.alert(
+        'Plan non démarré',
+        'Vous devez d\'abord commencer ce plan pour suivre votre progression.'
+      );
+      return;
+    }
+
+    await markDayComplete(day.day, day.readings.length);
     navigation.goBack();
   };
 
-  const handleOpenReading = (reading: typeof day.readings[0]) => {
-    navigation.navigate('BibleChapter', {
-      bookId: reading.bookId,
-      bookName: reading.bookName,
-      chapter: reading.chapter,
+  const handleOpenReading = (index: number) => {
+    navigation.navigate(SCREENS.READING_PLAN_READER, {
+      plan,
+      day,
+      userPlanId,
+      initialReadingIndex: index,
     });
   };
 
@@ -55,6 +92,20 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
     return `${reading.bookName} ${reading.chapter}`;
   };
 
+  // Trouver la prochaine lecture non complétée
+  const getNextUncompletedReading = useCallback(() => {
+    if (!hasUserPlan) return null;
+
+    for (let i = 0; i < day.readings.length; i++) {
+      if (!isReadingComplete(day.day, i)) {
+        return { reading: day.readings[i], index: i };
+      }
+    }
+    return null;
+  }, [hasUserPlan, day.readings, day.day, isReadingComplete]);
+
+  const nextUncompleted = getNextUncompletedReading();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -62,7 +113,6 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Header */}
         <LinearGradient
           colors={[colors.primary, colors.primaryDark]}
           start={{ x: 0, y: 0 }}
@@ -90,16 +140,17 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
                 <Ionicons name="book-outline" size={16} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.heroStatText}>{day.readings.length} lecture{day.readings.length > 1 ? 's' : ''}</Text>
               </View>
-              <View style={styles.heroStat}>
-                <Ionicons name="checkmark-circle-outline" size={16} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.heroStatText}>{completedReadings.length}/{day.readings.length}</Text>
-              </View>
+              {hasUserPlan && (
+                <View style={styles.heroStat}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color="rgba(255,255,255,0.8)" />
+                  <Text style={styles.heroStatText}>{completedReadingsCount}/{day.readings.length}</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.cardAccent} />
         </LinearGradient>
 
-        {/* Readings Section */}
         <View style={styles.readingsSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleWrap}>
@@ -110,10 +161,18 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
           </View>
 
           {day.readings.map((reading, index) => {
-            const key = `${day.id}-${index}`;
-            const isComplete = completedReadings.includes(key);
+            const isComplete = hasUserPlan && isReadingComplete(day.day, index);
+            const isNext = nextUncompleted?.index === index;
+
             return (
-              <View key={index} style={[styles.readingCard, isComplete && styles.readingCardComplete]}>
+              <View
+                key={index}
+                style={[
+                  styles.readingCard,
+                  isComplete && styles.readingCardComplete,
+                  isNext && styles.readingCardNext,
+                ]}
+              >
                 <TouchableOpacity
                   style={[styles.readingCheckbox, isComplete && styles.readingCheckboxComplete]}
                   onPress={() => toggleReading(index)}
@@ -122,25 +181,39 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
                   {isComplete && <Ionicons name="checkmark" size={18} color="#fff" />}
                 </TouchableOpacity>
                 <View style={styles.readingInfo}>
-                  <Text style={[styles.readingRef, isComplete && styles.readingRefComplete]}>
-                    {formatReading(reading)}
+                  <View style={styles.readingTitleRow}>
+                    <Text style={[styles.readingRef, isComplete && styles.readingRefComplete]}>
+                      {formatReading(reading)}
+                    </Text>
+                    {isNext && (
+                      <View style={styles.nextBadge}>
+                        <Text style={styles.nextBadgeText}>Suivant</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.readingHint}>
+                    {isComplete ? 'Lecture terminée' : 'Appuyez sur Lire pour ouvrir'}
                   </Text>
-                  <Text style={styles.readingHint}>Appuyez sur Lire pour ouvrir</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.readingOpenButton, isComplete && styles.readingOpenButtonComplete]}
-                  onPress={() => handleOpenReading(reading)}
+                  onPress={() => handleOpenReading(index)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="book-outline" size={18} color={isComplete ? colors.text.secondary : colors.primary} />
-                  <Text style={[styles.readingOpenText, isComplete && styles.readingOpenTextComplete]}>Lire</Text>
+                  <Ionicons
+                    name={isComplete ? "book" : "book-outline"}
+                    size={18}
+                    color={isComplete ? colors.text.secondary : colors.primary}
+                  />
+                  <Text style={[styles.readingOpenText, isComplete && styles.readingOpenTextComplete]}>
+                    {isComplete ? 'Relire' : 'Lire'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             );
           })}
         </View>
 
-        {/* Reflection */}
         {day.reflection && (
           <View style={styles.reflectionSection}>
             <View style={styles.sectionHeader}>
@@ -158,7 +231,6 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
           </View>
         )}
 
-        {/* Quick Actions */}
         <View style={styles.actionsSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleWrap}>
@@ -170,7 +242,7 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
           <View style={styles.actionsGrid}>
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => navigation.navigate('NoteEdit', {
+              onPress={() => navigation.navigate(SCREENS.NOTE_EDIT, {
                 note: undefined,
                 linkedVerseRef: day.readings[0] ? formatReading(day.readings[0]) : undefined,
               })}
@@ -184,49 +256,59 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, nextUncompleted && styles.actionCardHighlight]}
               onPress={() => {
-                if (day.readings[0]) {
-                  handleOpenReading(day.readings[0]);
+                if (nextUncompleted) {
+                  handleOpenReading(nextUncompleted.index);
+                } else if (day.readings[0]) {
+                  handleOpenReading(0);
                 }
               }}
               activeOpacity={0.8}
             >
-              <View style={styles.actionIconWrap}>
-                <Ionicons name="book-outline" size={24} color={colors.primary} />
+              <View style={[styles.actionIconWrap, nextUncompleted && styles.actionIconWrapHighlight]}>
+                <Ionicons name="book-outline" size={24} color={nextUncompleted ? '#fff' : colors.primary} />
               </View>
               <Text style={styles.actionCardTitle}>Bible</Text>
-              <Text style={styles.actionCardSubtitle}>Commencer la lecture</Text>
+              <Text style={styles.actionCardSubtitle}>
+                {nextUncompleted ? 'Continuer la lecture' : 'Commencer la lecture'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
 
-      {/* Bottom Button */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[
-            styles.completeButton,
-            !allReadingsComplete && styles.completeButtonDisabled,
-          ]}
-          onPress={handleMarkComplete}
-          disabled={!allReadingsComplete}
-          activeOpacity={0.9}
-        >
-          <Ionicons
-            name={allReadingsComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
-            size={20}
-            color={allReadingsComplete ? '#fff' : colors.text.tertiary}
-          />
-          <Text
+        {dayAlreadyComplete ? (
+          <View style={styles.completedBanner}>
+            <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+            <Text style={styles.completedBannerText}>Jour terminé</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
             style={[
-              styles.completeButtonText,
-              !allReadingsComplete && styles.completeButtonTextDisabled,
+              styles.completeButton,
+              !allReadingsComplete && styles.completeButtonDisabled,
             ]}
+            onPress={handleMarkComplete}
+            disabled={!allReadingsComplete}
+            activeOpacity={0.9}
           >
-            {allReadingsComplete ? 'Marquer comme terminé' : 'Terminez toutes les lectures'}
-          </Text>
-        </TouchableOpacity>
+            <Ionicons
+              name={allReadingsComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
+              size={20}
+              color={allReadingsComplete ? '#fff' : colors.text.tertiary}
+            />
+            <Text
+              style={[
+                styles.completeButtonText,
+                !allReadingsComplete && styles.completeButtonTextDisabled,
+              ]}
+            >
+              {allReadingsComplete ? 'Marquer comme terminé' : 'Terminez toutes les lectures'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -243,7 +325,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 120,
   },
-  // Hero Card
   heroCard: {
     margin: spacing.lg,
     borderRadius: borderRadius.xxl,
@@ -260,9 +341,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.lg,
   },
-  heroContent: {
-    // Content styling
-  },
+  heroContent: {},
   heroPlanTitle: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
@@ -315,7 +394,6 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  // Section Header
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,7 +421,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
   },
-  // Readings
   readingsSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
@@ -359,6 +436,10 @@ const styles = StyleSheet.create({
   },
   readingCardComplete: {
     backgroundColor: colors.primaryLight,
+  },
+  readingCardNext: {
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   readingCheckbox: {
     width: 32,
@@ -376,20 +457,36 @@ const styles = StyleSheet.create({
   readingInfo: {
     flex: 1,
   },
+  readingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   readingRef: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
-    marginBottom: 2,
   },
   readingRefComplete: {
     color: colors.text.secondary,
     textDecorationLine: 'line-through',
   },
+  nextBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  nextBadgeText: {
+    fontSize: 10,
+    fontFamily: fontFamily.bold,
+    color: '#fff',
+  },
   readingHint: {
     fontSize: fontSize.xs,
     fontFamily: fontFamily.regular,
     color: colors.text.tertiary,
+    marginTop: 2,
   },
   readingOpenButton: {
     flexDirection: 'row',
@@ -411,7 +508,6 @@ const styles = StyleSheet.create({
   readingOpenTextComplete: {
     color: colors.text.secondary,
   },
-  // Reflection
   reflectionSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
@@ -436,7 +532,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 24,
   },
-  // Actions
   actionsSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.xl,
@@ -452,6 +547,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     alignItems: 'center',
   },
+  actionCardHighlight: {
+    backgroundColor: colors.primaryLight,
+  },
   actionIconWrap: {
     width: 56,
     height: 56,
@@ -460,6 +558,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+  },
+  actionIconWrapHighlight: {
+    backgroundColor: colors.primary,
   },
   actionCardTitle: {
     fontSize: fontSize.md,
@@ -473,7 +574,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
   },
-  // Bottom Bar
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -484,6 +584,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.surface,
+  },
+  completedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    backgroundColor: '#22c55e15',
+    borderRadius: borderRadius.xl,
+  },
+  completedBannerText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: '#22c55e',
   },
   completeButton: {
     flexDirection: 'row',

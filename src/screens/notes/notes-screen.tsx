@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TextInput,
   FlatList,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,59 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDebouncedCallback } from 'use-debounce';
 import { RootStackParamList, Note, NoteCategory } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { useNotes } from '../../hooks';
 
 interface NotesScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Notes'>;
 }
-
-// Mock notes data
-const mockNotes: Note[] = [
-  {
-    id: '1',
-    title: 'Réflexion sur Jean 3:16',
-    content: 'Ce verset nous rappelle l\'amour infini de Dieu pour l\'humanité...',
-    category: 'meditation',
-    createdAt: '2024-12-22T10:00:00Z',
-    updatedAt: '2024-12-22T10:00:00Z',
-    linkedVerseRef: 'Jean 3:16',
-    isFavorite: true,
-  },
-  {
-    id: '2',
-    title: 'Prédication du dimanche',
-    content: 'Points clés de la prédication du Pasteur sur la foi...',
-    category: 'predication',
-    createdAt: '2024-12-21T09:00:00Z',
-    updatedAt: '2024-12-21T09:00:00Z',
-  },
-  {
-    id: '3',
-    title: 'Étude: Les fruits de l\'Esprit',
-    content: 'Galates 5:22-23 nous enseigne les neuf fruits de l\'Esprit...',
-    category: 'etude',
-    createdAt: '2024-12-20T14:00:00Z',
-    updatedAt: '2024-12-20T14:00:00Z',
-    linkedVerseRef: 'Galates 5:22-23',
-  },
-  {
-    id: '4',
-    title: 'Sujets de prière',
-    content: '1. La famille\n2. L\'église\n3. Les malades...',
-    category: 'priere',
-    createdAt: '2024-12-19T08:00:00Z',
-    updatedAt: '2024-12-19T08:00:00Z',
-    isFavorite: true,
-  },
-  {
-    id: '5',
-    title: 'Pensées personnelles',
-    content: 'Aujourd\'hui, j\'ai ressenti la présence de Dieu de manière particulière...',
-    category: 'personnel',
-    createdAt: '2024-12-18T20:00:00Z',
-    updatedAt: '2024-12-18T20:00:00Z',
-  },
-];
 
 const categoryConfig: Record<NoteCategory, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = {
   meditation: { label: 'Méditation', icon: 'heart', color: colors.primary },
@@ -86,10 +41,19 @@ const categories: { key: NoteCategory | 'all'; label: string }[] = [
 ];
 
 export function NotesScreen({ navigation }: NotesScreenProps) {
-  const [notes] = useState<Note[]>(mockNotes);
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<NoteCategory | 'all'>('all');
+  const {
+    notes,
+    loading,
+    refreshing,
+    stats,
+    deleteNote,
+    refresh,
+    setSearchQuery,
+    setCategory,
+  } = useNotes();
+
+  const [searchInput, setSearchInput] = React.useState('');
+  const [selectedCategory, setSelectedCategory] = React.useState<NoteCategory | 'all'>('all');
 
   const debouncedSearch = useDebouncedCallback((value: string) => {
     setSearchQuery(value);
@@ -103,16 +67,12 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
   const clearSearch = useCallback(() => {
     setSearchInput('');
     setSearchQuery('');
-  }, []);
+  }, [setSearchQuery]);
 
-  // Filtrer les notes
-  const filteredNotes = notes.filter(note => {
-    const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
-    const matchesSearch = !searchQuery ||
-      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.content.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const handleCategoryChange = useCallback((cat: NoteCategory | 'all') => {
+    setSelectedCategory(cat);
+    setCategory(cat);
+  }, [setCategory]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -132,9 +92,13 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
       'Êtes-vous sûr de vouloir supprimer cette note ?',
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => {
-          // TODO: Implement delete
-        }},
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteNote(noteId);
+          }
+        },
       ]
     );
   };
@@ -145,7 +109,8 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
     return (
       <TouchableOpacity
         style={styles.noteCard}
-        onPress={() => navigation.navigate('NoteDetail', { note })}
+        onPress={() => navigation.navigate(SCREENS.NOTE_DETAIL, { note })}
+        onLongPress={() => handleDeleteNote(note.id)}
         activeOpacity={0.8}
       >
         <View style={styles.noteHeader}>
@@ -158,7 +123,7 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
           )}
         </View>
         <Text style={styles.noteTitle} numberOfLines={1}>{note.title}</Text>
-        <Text style={styles.noteContent} numberOfLines={2}>{note.content}</Text>
+        <Text style={styles.noteContent} numberOfLines={2}>{note.contentPlain || note.content}</Text>
         <View style={styles.noteFooter}>
           <Text style={styles.noteDate}>{formatDate(note.updatedAt)}</Text>
           {note.linkedVerseRef && (
@@ -172,9 +137,19 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -185,11 +160,11 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Mes Notes</Text>
-          <Text style={styles.headerSubtitle}>{notes.length} notes</Text>
+          <Text style={styles.headerSubtitle}>{stats.total} notes</Text>
         </View>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => navigation.navigate('NoteEdit', {})}
+          onPress={() => navigation.navigate(SCREENS.NOTE_EDIT, {})}
           activeOpacity={0.7}
         >
           <LinearGradient
@@ -202,12 +177,18 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
       </View>
 
       <FlatList
-        data={filteredNotes}
+        data={notes}
         renderItem={renderNoteCard}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refresh}
+            colors={[colors.primary]}
+          />
+        }
         ListHeaderComponent={() => (
           <>
-            {/* Stats Card */}
             <LinearGradient
               colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
@@ -216,24 +197,23 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
             >
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{notes.length}</Text>
+                  <Text style={styles.statValue}>{stats.total}</Text>
                   <Text style={styles.statLabel}>Notes</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{notes.filter(n => n.isFavorite).length}</Text>
+                  <Text style={styles.statValue}>{stats.favorites}</Text>
                   <Text style={styles.statLabel}>Favoris</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{notes.filter(n => n.linkedVerseRef).length}</Text>
+                  <Text style={styles.statValue}>{stats.withVerses}</Text>
                   <Text style={styles.statLabel}>Avec versets</Text>
                 </View>
               </View>
               <View style={styles.cardAccent} />
             </LinearGradient>
 
-            {/* Search Bar */}
             <View style={styles.searchContainer}>
               <View style={styles.searchInputWrap}>
                 <Ionicons name="search" size={20} color={colors.text.secondary} />
@@ -254,7 +234,6 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
               </View>
             </View>
 
-            {/* Category Chips */}
             <FlatList
               data={categories}
               horizontal
@@ -267,7 +246,7 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
                     styles.categoryChip,
                     selectedCategory === cat.key && styles.categoryChipActive,
                   ]}
-                  onPress={() => setSelectedCategory(cat.key)}
+                  onPress={() => handleCategoryChange(cat.key)}
                   activeOpacity={0.8}
                 >
                   <Text
@@ -282,15 +261,14 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
               )}
             />
 
-            {/* Section Title */}
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleWrap}>
                 <View style={styles.sectionDot} />
                 <Text style={styles.sectionTitle}>
-                  {searchQuery ? 'Résultats' : 'Toutes les notes'}
+                  {searchInput ? 'Résultats' : 'Toutes les notes'}
                 </Text>
               </View>
-              <Text style={styles.noteCount}>{filteredNotes.length}</Text>
+              <Text style={styles.noteCount}>{notes.length}</Text>
             </View>
           </>
         )}
@@ -303,7 +281,7 @@ export function NotesScreen({ navigation }: NotesScreenProps) {
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
-              onPress={() => navigation.navigate('NoteEdit', {})}
+              onPress={() => navigation.navigate(SCREENS.NOTE_EDIT, {})}
               activeOpacity={0.8}
             >
               <Text style={styles.emptyButtonText}>Créer une note</Text>
@@ -321,6 +299,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
   },
   header: {
     flexDirection: 'row',
@@ -367,7 +356,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-  // Stats Card
   statsCard: {
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
@@ -409,7 +397,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     transform: [{ translateX: 30 }, { translateY: 30 }],
   },
-  // Search
   searchContainer: {
     marginBottom: spacing.md,
   },
@@ -429,7 +416,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.xs,
   },
-  // Categories
   categoriesContainer: {
     paddingBottom: spacing.lg,
     gap: spacing.sm,
@@ -452,7 +438,6 @@ const styles = StyleSheet.create({
   categoryChipTextActive: {
     color: '#fff',
   },
-  // Section Header
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,7 +465,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.primary,
   },
-  // Note Card
   noteCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
@@ -538,7 +522,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.primary,
   },
-  // Empty State
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: spacing.xxxl,

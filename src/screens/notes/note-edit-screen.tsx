@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,22 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
   Dimensions,
+  ActivityIndicator,
+  Animated,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, NoteCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { useNotes } from '../../hooks';
+import { RichTextEditor, RichTextEditorRef, FormattingToolbar } from '../../components/notes';
 
-const { height } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface NoteEditScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -34,64 +37,123 @@ const categoryOptions: { key: NoteCategory; label: string; icon: keyof typeof Io
 ];
 
 export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
+  const insets = useSafeAreaInsets();
   const existingNote = route.params?.note;
   const initialVerseRef = route.params?.linkedVerseRef;
   const prefillTitle = route.params?.prefillTitle;
   const prefillContent = route.params?.prefillContent;
   const isEditing = !!existingNote;
 
+  const { createNote, updateNote } = useNotes();
+
   const [title, setTitle] = useState(existingNote?.title || prefillTitle || '');
-  const [content, setContent] = useState(existingNote?.content || prefillContent || '');
+  const [htmlContent, setHtmlContent] = useState(existingNote?.content || prefillContent || '');
+  const [plainContent, setPlainContent] = useState(existingNote?.contentPlain || prefillContent || '');
   const [category, setCategory] = useState<NoteCategory>(existingNote?.category || 'meditation');
   const [linkedVerseRef, setLinkedVerseRef] = useState(existingNote?.linkedVerseRef || initialVerseRef || '');
   const [showOptions, setShowOptions] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeFormats, setActiveFormats] = useState<string[]>([]);
 
-  const contentInputRef = useRef<TextInput>(null);
+  const editorRef = useRef<RichTextEditorRef>(null);
+  // Base position includes safe area bottom inset
+  const baseToolbarPosition = insets.bottom;
+  const toolbarPosition = useRef(new Animated.Value(baseToolbarPosition)).current;
 
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardWillShow', (e) => {
+    // Update initial position when insets change
+    toolbarPosition.setValue(baseToolbarPosition);
+  }, [baseToolbarPosition, toolbarPosition]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates.height);
+      setIsKeyboardVisible(true);
+      Animated.timing(toolbarPosition, {
+        toValue: e.endCoordinates.height,
+        duration: Platform.OS === 'ios' ? e.duration : 250,
+        useNativeDriver: false,
+      }).start();
     });
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => {
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
       setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
+      Animated.timing(toolbarPosition, {
+        toValue: baseToolbarPosition,
+        duration: Platform.OS === 'ios' ? (e?.duration || 250) : 250,
+        useNativeDriver: false,
+      }).start();
     });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
+  }, [toolbarPosition, baseToolbarPosition]);
+
+  const handleContentChange = useCallback((html: string, plain: string) => {
+    setHtmlContent(html);
+    setPlainContent(plain);
   }, []);
 
-  const handleSave = () => {
+  const handleFormatChange = useCallback((formats: string[]) => {
+    setActiveFormats(formats);
+  }, []);
+
+  const handleFormat = useCallback((command: string, value?: string) => {
+    editorRef.current?.executeCommand(command, value);
+  }, []);
+
+  const handleDismissKeyboard = useCallback(() => {
+    editorRef.current?.dismissKeyboard();
+  }, []);
+
+  const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert('Erreur', 'Veuillez entrer un titre pour la note.');
       return;
     }
 
-    if (!content.trim()) {
+    if (!plainContent.trim()) {
       Alert.alert('Erreur', 'Veuillez entrer du contenu pour la note.');
       return;
     }
 
-    // TODO: Save to storage/API
-    const noteData = {
-      id: existingNote?.id || Date.now().toString(),
-      title: title.trim(),
-      content: content.trim(),
-      category,
-      linkedVerseRef: linkedVerseRef.trim() || undefined,
-      createdAt: existingNote?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isFavorite: existingNote?.isFavorite || false,
-    };
+    setIsSaving(true);
 
-    console.log('Saving note:', noteData);
-    navigation.goBack();
+    try {
+      if (isEditing && existingNote) {
+        await updateNote(existingNote.id, {
+          title: title.trim(),
+          content: htmlContent,
+          contentPlain: plainContent.trim(),
+          category,
+          linkedVerseRef: linkedVerseRef.trim() || undefined,
+        });
+      } else {
+        await createNote({
+          title: title.trim(),
+          content: htmlContent,
+          contentPlain: plainContent.trim(),
+          category,
+          linkedVerseRef: linkedVerseRef.trim() || undefined,
+        });
+      }
+      navigation.goBack();
+    } catch (error) {
+      setIsSaving(false);
+      Alert.alert('Erreur', 'Impossible de sauvegarder la note');
+    }
   };
 
   const handleCancel = () => {
-    if (title || content) {
+    if (title || plainContent) {
       Alert.alert(
         'Annuler',
         'Êtes-vous sûr de vouloir annuler ? Les modifications seront perdues.',
@@ -107,9 +169,19 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
 
   const currentCategory = categoryOptions.find(c => c.key === category);
 
+  if (isSaving) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Sauvegarde...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Minimal Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerButton}
@@ -122,7 +194,10 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.categoryButton}
-            onPress={() => setShowOptions(!showOptions)}
+            onPress={() => {
+              handleDismissKeyboard();
+              setShowOptions(!showOptions);
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name={currentCategory?.icon || 'folder'} size={18} color={colors.primary} />
@@ -140,7 +215,6 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
         </View>
       </View>
 
-      {/* Category Options Dropdown */}
       {showOptions && (
         <View style={styles.optionsPanel}>
           <View style={styles.optionSection}>
@@ -177,7 +251,7 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
             </View>
           </View>
 
-          <View style={styles.optionSection}>
+          <View style={[styles.optionSection, { marginBottom: 0 }]}>
             <Text style={styles.optionLabel}>Référence biblique</Text>
             <View style={styles.verseInputWrap}>
               <Ionicons name="book-outline" size={18} color={colors.text.tertiary} />
@@ -194,12 +268,7 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
         </View>
       )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={0}
-      >
-        {/* Verse Reference Badge (if set) */}
+      <View style={[styles.editorContainer, { marginBottom: isKeyboardVisible ? 56 : 56 + insets.bottom }]}>
         {linkedVerseRef && !showOptions && (
           <TouchableOpacity
             style={styles.verseBadge}
@@ -211,7 +280,6 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
           </TouchableOpacity>
         )}
 
-        {/* Title Input - Large and prominent */}
         <TextInput
           style={styles.titleInput}
           placeholder="Titre"
@@ -220,42 +288,51 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
           onChangeText={setTitle}
           maxLength={100}
           returnKeyType="next"
-          onSubmitEditing={() => contentInputRef.current?.focus()}
         />
 
-        {/* Content Input - Maximum space */}
-        <TextInput
-          ref={contentInputRef}
-          style={[
-            styles.contentInput,
-            { minHeight: height - 280 - keyboardHeight },
-          ]}
+        <RichTextEditor
+          ref={editorRef}
+          initialContent={htmlContent}
+          onChange={handleContentChange}
+          onFormatChange={handleFormatChange}
           placeholder="Commencez à écrire..."
-          placeholderTextColor={colors.text.tertiary}
-          value={content}
-          onChangeText={setContent}
-          multiline
-          textAlignVertical="top"
-          autoFocus={!isEditing}
         />
-      </KeyboardAvoidingView>
-
-      {/* Bottom Toolbar */}
-      <View style={[styles.toolbar, { marginBottom: keyboardHeight > 0 ? 0 : 0 }]}>
-        <TouchableOpacity
-          style={styles.toolbarButton}
-          onPress={() => setShowOptions(!showOptions)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="options-outline" size={22} color={colors.text.secondary} />
-        </TouchableOpacity>
-
-        <View style={styles.wordCount}>
-          <Text style={styles.wordCountText}>
-            {content.length} caractères
-          </Text>
-        </View>
       </View>
+
+      <Animated.View style={[styles.floatingToolbar, { bottom: toolbarPosition }]}>
+        <View style={styles.toolbarContent}>
+          <FormattingToolbar
+            onFormat={handleFormat}
+            activeFormats={activeFormats}
+          />
+          <View style={styles.toolbarBottom}>
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => {
+                handleDismissKeyboard();
+                setShowOptions(!showOptions);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="options-outline" size={20} color={colors.text.secondary} />
+            </TouchableOpacity>
+
+            <Text style={styles.wordCountText}>
+              {plainContent.length} caractères
+            </Text>
+
+            {isKeyboardVisible && (
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={handleDismissKeyboard}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-down" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -265,7 +342,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  // Header - Minimal
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,7 +395,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Options Panel
   optionsPanel: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.md,
@@ -368,12 +454,10 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.xs,
   },
-  // Keyboard View
-  keyboardView: {
+  editorContainer: {
     flex: 1,
     paddingHorizontal: spacing.lg,
   },
-  // Verse Badge
   verseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -390,7 +474,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.primary,
   },
-  // Title Input - Large
   titleInput: {
     fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
@@ -398,37 +481,30 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
   },
-  // Content Input - Maximum space
-  contentInput: {
-    flex: 1,
-    fontSize: fontSize.lg,
-    fontFamily: fontFamily.regular,
-    color: colors.text.primary,
-    lineHeight: 28,
-    paddingBottom: spacing.xl,
+  floatingToolbar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface,
   },
-  // Toolbar
-  toolbar: {
+  toolbarContent: {},
+  toolbarBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     backgroundColor: colors.background,
   },
   toolbarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  wordCount: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
   },
   wordCountText: {
     fontSize: fontSize.xs,

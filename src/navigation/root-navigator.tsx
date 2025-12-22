@@ -22,13 +22,14 @@ import {
   MyDonationsScreen,
   MyCellScreen,
   MyFavoritesScreen,
+  MyLibraryScreen,
   SocialMediaScreen,
 } from '../screens/profile';
 import { MeditationsScreen, MeditationDetailScreen, MeditationListScreen } from '../screens/meditations';
 import { QuizScreen, QuizCategoryScreen, QuizPlayScreen, QuizResultScreen } from '../screens/quiz';
 import { BibleScreen, BibleBookScreen, BibleChapterScreen, VerseCompareScreen } from '../screens/bible';
 import { NotesScreen, NoteDetailScreen, NoteEditScreen } from '../screens/notes';
-import { ReadingPlansScreen, ReadingPlanDetailScreen, ReadingPlanDayScreen } from '../screens/reading-plans';
+import { ReadingPlansScreen, ReadingPlanDetailScreen, ReadingPlanDayScreen, ReadingPlanReaderScreen } from '../screens/reading-plans';
 import { TabNavigator } from './tab-navigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -81,6 +82,7 @@ export function RootNavigator() {
         <Stack.Screen name={SCREENS.MY_DONATIONS} component={MyDonationsScreen} />
         <Stack.Screen name={SCREENS.MY_CELL} component={MyCellScreen} />
         <Stack.Screen name={SCREENS.MY_FAVORITES} component={MyFavoritesScreen} />
+        <Stack.Screen name={SCREENS.MY_LIBRARY} component={MyLibraryScreen} />
         <Stack.Screen name={SCREENS.SOCIAL_MEDIA} component={SocialMediaScreen} />
         <Stack.Screen name={SCREENS.MEDITATIONS} component={MeditationsScreen} />
         <Stack.Screen name={SCREENS.MEDITATION_LIST} component={MeditationListScreen} />
@@ -99,6 +101,11 @@ export function RootNavigator() {
         <Stack.Screen name={SCREENS.READING_PLANS} component={ReadingPlansScreen} />
         <Stack.Screen name={SCREENS.READING_PLAN_DETAIL} component={ReadingPlanDetailScreen} />
         <Stack.Screen name={SCREENS.READING_PLAN_DAY} component={ReadingPlanDayScreen} />
+        <Stack.Screen
+          name={SCREENS.READING_PLAN_READER}
+          component={ReadingPlanReaderScreen}
+          options={{ animation: 'slide_from_bottom' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

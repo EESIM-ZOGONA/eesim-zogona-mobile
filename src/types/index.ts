@@ -110,7 +110,7 @@ export type RootStackParamList = {
   [SCREENS.MAIN]: undefined;
   [SCREENS.HOME]: undefined;
   [SCREENS.HYMNS]: undefined;
-  [SCREENS.HYMN_DETAIL]: { hymn: Hymn };
+  [SCREENS.HYMN_DETAIL]: { hymnId: string };
   [SCREENS.TV]: undefined;
   [SCREENS.VIDEO_PLAYER]: {
     video: {
@@ -142,6 +142,7 @@ export type RootStackParamList = {
   [SCREENS.MY_DONATIONS]: undefined;
   [SCREENS.MY_CELL]: undefined;
   [SCREENS.MY_FAVORITES]: undefined;
+  [SCREENS.MY_LIBRARY]: undefined;
   [SCREENS.SOCIAL_MEDIA]: undefined;
   [SCREENS.MEDITATIONS]: undefined;
   [SCREENS.MEDITATION_LIST]: { category?: MeditationCategory };
@@ -164,8 +165,14 @@ export type RootStackParamList = {
   [SCREENS.NOTE_DETAIL]: { note: Note };
   [SCREENS.NOTE_EDIT]: { note?: Note; linkedVerseRef?: string; prefillTitle?: string; prefillContent?: string };
   [SCREENS.READING_PLANS]: undefined;
-  [SCREENS.READING_PLAN_DETAIL]: { plan: ReadingPlan };
-  [SCREENS.READING_PLAN_DAY]: { plan: ReadingPlan; day: ReadingPlanDay };
+  [SCREENS.READING_PLAN_DETAIL]: { plan: ReadingPlan; userPlanId?: string };
+  [SCREENS.READING_PLAN_DAY]: { plan: ReadingPlan; day: ReadingPlanDay; userPlanId?: string };
+  [SCREENS.READING_PLAN_READER]: {
+    plan: ReadingPlan;
+    day: ReadingPlanDay;
+    userPlanId?: string;
+    initialReadingIndex: number;
+  };
 };
 
 // Meditation types
@@ -240,14 +247,22 @@ export interface BibleChapter {
 }
 
 // Verse Highlight types
-export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange';
+export type HighlightColor = 'yellow' | 'green' | 'red' | 'pink' | 'violet';
 
 export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
-  yellow: '#FEF3C7',
-  green: '#D1FAE5',
-  blue: '#DBEAFE',
-  pink: '#FCE7F3',
-  orange: '#FFEDD5',
+  yellow: '#FACC15',
+  green: '#22C55E',
+  red: '#EF4444',
+  pink: '#EC4899',
+  violet: '#8B5CF6',
+};
+
+export const HIGHLIGHT_TEXT_COLORS: Record<HighlightColor, string> = {
+  yellow: '#000000',
+  green: '#FFFFFF',
+  red: '#FFFFFF',
+  pink: '#FFFFFF',
+  violet: '#FFFFFF',
 };
 
 export interface VerseHighlight {
@@ -286,19 +301,47 @@ export interface UserHighlightPreferences {
   defaultColor: HighlightColor;
 }
 
-// Notes types
+export type SyncStatus = 'local' | 'synced' | 'pending' | 'conflict';
+
 export interface Note {
   id: string;
   title: string;
   content: string;
+  contentPlain: string;
   category: NoteCategory;
+  linkedVerseRef?: string;
+  linkedBookId?: string;
+  linkedChapter?: number;
+  isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
-  linkedVerseRef?: string; // e.g., "Jean 3:16"
-  isFavorite?: boolean;
+  syncStatus: SyncStatus;
 }
 
 export type NoteCategory = 'meditation' | 'predication' | 'etude' | 'priere' | 'personnel';
+
+export interface UserReadingPlan {
+  id: string;
+  planId: string;
+  planType: 'template' | 'annual_chronological' | 'annual_classic' | 'annual_mixed';
+  title: string;
+  startDate: string;
+  status: 'active' | 'paused' | 'completed';
+  currentDay: number;
+  totalDays: number;
+  createdAt: string;
+  updatedAt: string;
+  syncStatus: SyncStatus;
+}
+
+export interface ReadingPlanProgressEntry {
+  id: string;
+  userPlanId: string;
+  dayNumber: number;
+  completedAt?: string;
+  readingsCompleted: number[];
+  notes?: string;
+}
 
 // Reading Plan types
 export interface ReadingPlan {

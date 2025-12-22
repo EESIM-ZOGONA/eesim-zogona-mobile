@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,9 +16,11 @@ import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, MainTabParamList, HymnCategory, Hymn } from '../../types';
+import { useDebouncedCallback } from 'use-debounce';
+import { RootStackParamList, MainTabParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { mockHymns } from '../../utils';
+import { SCREENS } from '../../constants/screens';
+import { useHymns, type Hymn, type HymnSearchResult } from '../../hooks';
 
 const { width } = Dimensions.get('window');
 
@@ -33,16 +36,6 @@ interface HymnsScreenProps {
 // Couleur primaire unique
 const primaryGradient: [string, string] = [colors.primary, colors.primaryDark];
 
-const categories: { key: HymnCategory | 'all'; label: string; icon: string }[] = [
-  { key: 'all', label: 'Tous', icon: 'musical-notes' },
-  { key: 'louange', label: 'Louange', icon: 'megaphone' },
-  { key: 'adoration', label: 'Adoration', icon: 'heart' },
-  { key: 'communion', label: 'Communion', icon: 'people' },
-  { key: 'paques', label: 'Paques', icon: 'sunny' },
-  { key: 'noel', label: 'Noel', icon: 'star' },
-];
-
-// Schéma de couleur primaire unique
 const hymnColorScheme = {
   bg: colors.primaryLight,
   text: colors.primary,
@@ -50,29 +43,92 @@ const hymnColorScheme = {
 };
 
 export function HymnsScreen({ navigation }: HymnsScreenProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<HymnCategory | 'all'>('all');
+  const [searchInput, setSearchInput] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  const filteredHymns = useMemo(() => {
-    return mockHymns.filter((hymn) => {
-      const matchesSearch =
-        hymn.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        hymn.number.toString().includes(searchQuery);
-      const matchesCategory =
-        selectedCategory === 'all' || hymn.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [searchQuery, selectedCategory]);
+  const {
+    hymns,
+    loading,
+    error,
+    search,
+    searchResults,
+    isSearching,
+    recentlyPlayed,
+  } = useHymns();
+
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    search(value);
+  }, 300);
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchInput(text);
+    debouncedSearch(text);
+  }, [debouncedSearch]);
+
+  const displayedHymns = searchInput.trim() ? searchResults : hymns;
 
   const handleHymnPress = (hymn: Hymn) => {
-    navigation.navigate('HymnDetail', { hymn });
+    navigation.navigate(SCREENS.HYMN_DETAIL, { hymnId: hymn.id });
   };
 
-  // Popular hymns (first 5)
-  const popularHymns = mockHymns.slice(0, 5);
+  const popularHymns = recentlyPlayed.length > 0 ? recentlyPlayed : hymns.slice(0, 5);
+  const isSearchActive = searchInput.trim().length > 0;
 
-  const renderHymnItem = ({ item, index }: { item: Hymn; index: number }) => {
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return <Text>{text}</Text>;
+
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <Text>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase()
+            ? <Text key={i} style={styles.highlightedText}>{part}</Text>
+            : part
+        )}
+      </Text>
+    );
+  };
+
+  const renderSearchResultItem = ({ item }: { item: HymnSearchResult }) => {
+    const colorScheme = hymnColorScheme;
+
+    return (
+      <TouchableOpacity
+        style={styles.searchResultCard}
+        onPress={() => handleHymnPress(item)}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={colorScheme.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hymnNumberBadge}
+        >
+          <Text style={styles.hymnNumberText}>{item.number}</Text>
+        </LinearGradient>
+
+        <View style={styles.searchResultContent}>
+          <Text style={styles.hymnTitle} numberOfLines={1}>
+            {highlightText(item.title, searchInput)}
+          </Text>
+          {item.matchType === 'content' && item.matchContext && (
+            <View style={styles.matchContextRow}>
+              <Text style={styles.matchLabel}>
+                {item.verseType === 'chorus' ? 'Refrain' : `Couplet ${item.verseNumber}`}:
+              </Text>
+              <Text style={styles.matchContext} numberOfLines={2}>
+                {highlightText(item.matchContext, searchInput)}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
+      </TouchableOpacity>
+    );
+  };
+
+  const renderHymnItem = ({ item }: { item: Hymn }) => {
     const colorScheme = hymnColorScheme;
 
     if (viewMode === 'grid') {
@@ -95,11 +151,6 @@ export function HymnsScreen({ navigation }: HymnsScreenProps) {
           </LinearGradient>
           <View style={styles.hymnGridContent}>
             <Text style={styles.hymnGridTitle} numberOfLines={2}>{item.title}</Text>
-            <View style={[styles.hymnGridCategory, { backgroundColor: colorScheme.bg }]}>
-              <Text style={[styles.hymnGridCategoryText, { color: colorScheme.text }]}>
-                {item.category}
-              </Text>
-            </View>
           </View>
         </TouchableOpacity>
       );
@@ -111,7 +162,6 @@ export function HymnsScreen({ navigation }: HymnsScreenProps) {
         onPress={() => handleHymnPress(item)}
         activeOpacity={0.9}
       >
-        {/* Number badge with gradient */}
         <LinearGradient
           colors={colorScheme.gradient}
           start={{ x: 0, y: 0 }}
@@ -121,36 +171,34 @@ export function HymnsScreen({ navigation }: HymnsScreenProps) {
           <Text style={styles.hymnNumberText}>{item.number}</Text>
         </LinearGradient>
 
-        {/* Content */}
         <View style={styles.hymnContent}>
           <Text style={styles.hymnTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.hymnMeta}>
-            {item.author && (
-              <Text style={styles.hymnAuthor} numberOfLines={1}>{item.author}</Text>
-            )}
-            <View style={[styles.hymnCategoryBadge, { backgroundColor: colorScheme.bg }]}>
-              <Text style={[styles.hymnCategoryText, { color: colorScheme.text }]}>
-                {item.category}
-              </Text>
-            </View>
-          </View>
         </View>
 
-        {/* Play button */}
         <TouchableOpacity style={[styles.playButton, { backgroundColor: colorScheme.bg }]}>
-          <Ionicons name="play" size={16} color={colorScheme.text} />
+          <Ionicons name="chevron-forward" size={20} color={colorScheme.text} />
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement des cantiques...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Cantiques</Text>
-          <Text style={styles.headerSubtitle}>{filteredHymns.length} cantiques</Text>
+          <Text style={styles.headerSubtitle}>{displayedHymns.length} cantiques</Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -168,69 +216,37 @@ export function HymnsScreen({ navigation }: HymnsScreenProps) {
         </View>
       </View>
 
-      {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchIconWrap}>
           <Ionicons name="search" size={18} color={colors.text.tertiary} />
         </View>
         <TextInput
           style={styles.searchInput}
-          placeholder="Rechercher un cantique..."
+          placeholder="Rechercher par numéro ou titre..."
           placeholderTextColor={colors.text.tertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={searchInput}
+          onChangeText={handleSearchChange}
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+        {isSearching && (
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: spacing.sm }} />
+        )}
+        {searchInput.length > 0 && !isSearching && (
+          <TouchableOpacity onPress={() => { setSearchInput(''); search(''); }} style={styles.clearButton}>
             <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Categories */}
-      <View style={styles.categoriesWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categories}
-        >
-          {categories.map((cat) => {
-            const isActive = selectedCategory === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={styles.categoryChip}
-                onPress={() => setSelectedCategory(cat.key)}
-              >
-                {isActive ? (
-                  <LinearGradient
-                    colors={primaryGradient}
-                    style={styles.categoryChipGradient}
-                  >
-                    <Ionicons name={cat.icon as any} size={14} color="#fff" />
-                    <Text style={styles.categoryTextActive}>{cat.label}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={styles.categoryChipInner}>
-                    <Ionicons name={cat.icon as any} size={14} color={colors.primary} />
-                    <Text style={[styles.categoryText, { color: colors.text.secondary }]}>{cat.label}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Popular Section (when not searching) */}
-      {!searchQuery && selectedCategory === 'all' && (
+      {!searchInput && popularHymns.length > 0 && (
         <View style={styles.popularSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleWrap}>
               <View style={styles.sectionIcon}>
-                <Ionicons name="flame" size={14} color="#dc2626" />
+                <Ionicons name="time" size={14} color={colors.primary} />
               </View>
-              <Text style={styles.sectionTitle}>Populaires</Text>
+              <Text style={styles.sectionTitle}>
+                {recentlyPlayed.length > 0 ? 'Récemment écoutés' : 'Premiers cantiques'}
+              </Text>
             </View>
           </View>
           <ScrollView
@@ -238,68 +254,81 @@ export function HymnsScreen({ navigation }: HymnsScreenProps) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.popularList}
           >
-            {popularHymns.map((hymn, index) => {
-              return (
-                <TouchableOpacity
-                  key={hymn.id}
-                  style={styles.popularCard}
-                  onPress={() => handleHymnPress(hymn)}
-                  activeOpacity={0.9}
+            {popularHymns.map((hymn) => (
+              <TouchableOpacity
+                key={hymn.id}
+                style={styles.popularCard}
+                onPress={() => handleHymnPress(hymn)}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={primaryGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.popularGradient}
                 >
-                  <LinearGradient
-                    colors={primaryGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.popularGradient}
-                  >
-                    <View style={styles.popularBadge}>
-                      <Ionicons name="flame" size={10} color="#fff" />
-                      <Text style={styles.popularBadgeText}>#{index + 1}</Text>
-                    </View>
-                    <Text style={styles.popularNumber}>{hymn.number}</Text>
-                    <Text style={styles.popularTitle} numberOfLines={2}>{hymn.title}</Text>
-                    <View style={styles.popularPlayButton}>
-                      <Ionicons name="play" size={14} color="#fff" />
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-              );
-            })}
+                  <Text style={styles.popularNumber}>{hymn.number}</Text>
+                  <Text style={styles.popularTitle} numberOfLines={2}>{hymn.title}</Text>
+                  <View style={styles.popularPlayButton}>
+                    <Ionicons name="musical-note" size={14} color="#fff" />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         </View>
       )}
 
-      {/* Section Header */}
       <View style={styles.listSectionHeader}>
         <View style={styles.sectionTitleWrap}>
           <View style={styles.sectionDot} />
           <Text style={styles.sectionTitle}>
-            {searchQuery ? 'Resultats' : selectedCategory === 'all' ? 'Tous les cantiques' : `Cantiques de ${selectedCategory}`}
+            {searchInput ? 'Résultats' : 'Tous les cantiques'}
           </Text>
         </View>
       </View>
 
-      {/* Hymns List */}
-      <FlatList
-        data={filteredHymns}
-        renderItem={renderHymnItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={viewMode === 'grid' ? styles.gridContent : styles.listContent}
-        numColumns={viewMode === 'grid' ? 2 : 1}
-        key={viewMode}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="musical-notes-outline" size={40} color={colors.primary} />
+      {isSearchActive ? (
+        <FlatList
+          data={searchResults}
+          renderItem={renderSearchResultItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="search-outline" size={40} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>Aucun résultat</Text>
+              <Text style={styles.emptyText}>
+                Essayez avec un autre mot ou numéro de cantique
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>Aucun cantique trouve</Text>
-            <Text style={styles.emptyText}>
-              Modifiez votre recherche ou selectionnez une autre categorie
-            </Text>
-          </View>
-        }
-      />
+          }
+        />
+      ) : (
+        <FlatList
+          data={hymns}
+          renderItem={renderHymnItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={viewMode === 'grid' ? styles.gridContent : styles.listContent}
+          numColumns={viewMode === 'grid' ? 2 : 1}
+          key={viewMode}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="musical-notes-outline" size={40} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>Aucun cantique</Text>
+              <Text style={styles.emptyText}>
+                Les cantiques seront disponibles après le chargement
+              </Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -308,6 +337,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
   },
   // Header
   header: {
@@ -642,6 +682,39 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  // Search Results
+  searchResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  searchResultContent: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  matchContextRow: {
+    marginTop: spacing.xs,
+  },
+  matchLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  matchContext: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  highlightedText: {
+    backgroundColor: colors.primaryLight,
+    color: colors.primary,
+    fontFamily: fontFamily.bold,
   },
   // Empty State
   emptyState: {

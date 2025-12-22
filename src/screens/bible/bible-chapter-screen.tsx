@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Share,
   Dimensions,
   ActivityIndicator,
   Modal,
@@ -26,8 +25,10 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
-import { RootStackParamList, BibleVerse } from '../../types';
+import { RootStackParamList, BibleVerse, HighlightColor, HIGHLIGHT_COLORS, HIGHLIGHT_TEXT_COLORS } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { ReadingTimeBadge, BibleVersionPicker, VerseActions, VerseHighlightPicker } from '../../components/bible';
+import { useVerseActions, useVerseHighlights } from '../../hooks';
 import {
   getChapterVerses,
   getBookById,
@@ -36,7 +37,6 @@ import {
   BibleVersionCode,
   getCurrentVersion,
   setCurrentVersion,
-  getCurrentVersionInfo,
 } from '../../services/bible-database';
 
 const { width, height } = Dimensions.get('window');
@@ -71,6 +71,37 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
   const [showVersionNav, setShowVersionNav] = useState(false);
   const [showFontControls, setShowFontControls] = useState(false);
   const [currentVersion, setCurrentVersionState] = useState<BibleVersionCode>('LSG');
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+
+  // Hook pour les highlights
+  const {
+    recentColors,
+    addHighlight,
+    removeHighlight,
+    getHighlightColor,
+    refreshHighlights,
+  } = useVerseHighlights({
+    bookId,
+    chapter,
+  });
+
+  // Hook pour les actions sur les versets
+  const {
+    handleShare,
+    handleCopy,
+    handleAddNote,
+    handleCompare,
+    handleBookmark,
+  } = useVerseActions({
+    bookId,
+    bookName,
+    chapter,
+    selectedVerses,
+    verses,
+    version: currentVersion,
+    navigation,
+    onActionComplete: () => setSelectedVerses([]),
+  });
 
   // Animation for chapter modal sliding from top
   const chapterModalY = useSharedValue(-height * 0.5);
@@ -145,41 +176,19 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
     );
   };
 
-  const handleShare = async () => {
-    const versesToShare = selectedVerses.length > 0
-      ? verses.filter(v => selectedVerses.includes(v.verse))
-      : [];
+  const handleHighlightColor = useCallback(async (color: HighlightColor) => {
+    await addHighlight(selectedVerses, color);
+    setShowHighlightPicker(false);
+    setSelectedVerses([]);
+    refreshHighlights();
+  }, [selectedVerses, addHighlight, refreshHighlights]);
 
-    if (versesToShare.length === 0) return;
-
-    const text = versesToShare
-      .map(v => `${v.verse}. ${v.text}`)
-      .join('\n');
-
-    const reference = `${bookName} ${chapter}:${selectedVerses.sort((a, b) => a - b).join(', ')}`;
-
-    await Share.share({
-      message: `${text}\n\n— ${reference} (LSG)`,
-    });
-  };
-
-  const handleAddNote = () => {
-    if (selectedVerses.length === 0) return;
-
-    const sortedVerses = selectedVerses.sort((a, b) => a - b);
-    const verseRef = `${bookName} ${chapter}:${sortedVerses.join(', ')}`;
-    const selectedTexts = verses
-      .filter(v => sortedVerses.includes(v.verse))
-      .map(v => `${v.verse}. ${v.text}`)
-      .join('\n');
-
-    navigation.navigate(SCREENS.NOTE_EDIT, {
-      note: undefined,
-      linkedVerseRef: verseRef,
-      prefillTitle: `Réflexion sur ${verseRef}`,
-      prefillContent: `"${selectedTexts}"\n\n`,
-    });
-  };
+  const handleRemoveHighlight = useCallback(async () => {
+    await removeHighlight(selectedVerses);
+    setShowHighlightPicker(false);
+    setSelectedVerses([]);
+    refreshHighlights();
+  }, [selectedVerses, removeHighlight, refreshHighlights]);
 
   const goToPrevChapter = useCallback(() => {
     if (isFirstChapter) return;
@@ -303,15 +312,6 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
     setShowVersionNav(false);
   };
 
-  const handleCompareVerses = () => {
-    if (selectedVerses.length === 0) return;
-    navigation.navigate(SCREENS.VERSE_COMPARE, {
-      bookId,
-      bookName,
-      chapter,
-      verses: selectedVerses.sort((a, b) => a - b),
-    });
-  };
 
   const currentVersionInfo = BIBLE_VERSIONS.find(v => v.code === currentVersion) || BIBLE_VERSIONS[0];
 
@@ -396,38 +396,46 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
             {/* Verses */}
             {hasVerses ? (
               <>
-                {verses.map((verse) => (
-                  <TouchableOpacity
-                    key={verse.verse}
-                    onLayout={(e) => handleVerseLayout(verse.verse, e.nativeEvent.layout.y)}
-                    onPress={() => toggleVerseSelection(verse.verse)}
-                    onLongPress={() => {
-                      setSelectedVerses([verse.verse]);
-                      handleShare();
-                    }}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.verseRow,
-                      selectedVerses.includes(verse.verse) && styles.verseRowSelected,
-                    ]}
-                  >
-                    <Text style={[
-                      styles.verseNumber,
-                      selectedVerses.includes(verse.verse) && styles.verseNumberSelected,
-                    ]}>
-                      {verse.verse}
-                    </Text>
-                    <Text
+                {verses.map((verse) => {
+                  const highlightColor = getHighlightColor(verse.verse);
+                  const isSelected = selectedVerses.includes(verse.verse);
+                  const textColor = highlightColor ? HIGHLIGHT_TEXT_COLORS[highlightColor] : undefined;
+                  return (
+                    <TouchableOpacity
+                      key={verse.verse}
+                      onLayout={(e) => handleVerseLayout(verse.verse, e.nativeEvent.layout.y)}
+                      onPress={() => toggleVerseSelection(verse.verse)}
+                      onLongPress={() => {
+                        setSelectedVerses([verse.verse]);
+                        handleShare();
+                      }}
+                      activeOpacity={0.8}
                       style={[
-                        styles.verseText,
-                        { fontSize: currentFontSize, lineHeight: currentLineHeight },
-                        selectedVerses.includes(verse.verse) && styles.verseTextSelected,
+                        styles.verseRow,
+                        isSelected && styles.verseRowSelected,
+                        highlightColor && { backgroundColor: HIGHLIGHT_COLORS[highlightColor] },
                       ]}
                     >
-                      {verse.text}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text style={[
+                        styles.verseNumber,
+                        isSelected && styles.verseNumberSelected,
+                        textColor && { color: textColor },
+                      ]}>
+                        {verse.verse}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.verseText,
+                          { fontSize: currentFontSize, lineHeight: currentLineHeight },
+                          isSelected && styles.verseTextSelected,
+                          textColor && { color: textColor },
+                        ]}
+                      >
+                        {verse.text}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </>
             ) : (
               <View style={styles.emptyState}>
@@ -480,41 +488,30 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
         </View>
       )}
 
-      {/* Selection Actions (floating) */}
-      {hasSelection && (
-        <View style={styles.floatingActions}>
-          <TouchableOpacity
-            style={styles.floatingBtn}
-            onPress={handleCompareVerses}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="git-compare-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.floatingBtn}
-            onPress={handleShare}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="share-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.floatingBtn}
-            onPress={handleAddNote}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="create-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.floatingBtn, styles.floatingBtnCancel]}
-            onPress={() => setSelectedVerses([])}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close" size={20} color={colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-      )}
+      <VerseActions
+        visible={hasSelection && !showHighlightPicker}
+        selectedCount={selectedVerses.length}
+        onShare={handleShare}
+        onAddNote={handleAddNote}
+        onHighlight={() => setShowHighlightPicker(true)}
+        onBookmark={handleBookmark}
+        onCopy={handleCopy}
+        onClear={() => setSelectedVerses([])}
+      />
 
-      {/* Bottom Navigation */}
+      <VerseHighlightPicker
+        visible={showHighlightPicker}
+        onSelectColor={handleHighlightColor}
+        onRemoveHighlight={handleRemoveHighlight}
+        onClose={() => setShowHighlightPicker(false)}
+        recentColors={recentColors}
+      />
+
+      <ReadingTimeBadge
+        verses={verses}
+        visible={!isLoading && hasVerses && !hasSelection && !showFontControls}
+      />
+
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={[styles.navBtn, isFirstChapter && styles.navBtnDisabled]}
@@ -654,56 +651,12 @@ export function BibleChapterScreen({ navigation, route }: BibleChapterScreenProp
         </TouchableOpacity>
       </Modal>
 
-      {/* Version Navigation Modal */}
-      <Modal
+      <BibleVersionPicker
         visible={showVersionNav}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowVersionNav(false)}
-      >
-        <TouchableOpacity
-          style={styles.versionModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowVersionNav(false)}
-        >
-          <View style={styles.versionModalContent}>
-            <View style={styles.navModalHeader}>
-              <Text style={styles.navModalTitle}>Version de la Bible</Text>
-              <TouchableOpacity onPress={() => setShowVersionNav(false)}>
-                <Ionicons name="close" size={24} color={colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={BIBLE_VERSIONS}
-              keyExtractor={(item) => item.code}
-              contentContainerStyle={styles.versionList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.versionItem,
-                    currentVersion === item.code && styles.versionItemActive,
-                  ]}
-                  onPress={() => handleVersionChange(item.code)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.versionItemInfo}>
-                    <Text style={[
-                      styles.versionItemName,
-                      currentVersion === item.code && styles.versionItemNameActive,
-                    ]}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.versionItemCode}>{item.shortName}</Text>
-                  </View>
-                  {currentVersion === item.code && (
-                    <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        currentVersion={currentVersion}
+        onSelectVersion={handleVersionChange}
+        onClose={() => setShowVersionNav(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -833,7 +786,6 @@ const styles = StyleSheet.create({
   verseRow: {
     flexDirection: 'row',
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.xs,
   },
   verseRowSelected: {
@@ -883,33 +835,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontFamily: fontFamily.regular,
     color: colors.text.tertiary,
-  },
-  // Floating Actions
-  floatingActions: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: 100,
-    flexDirection: 'column',
-    gap: spacing.sm,
-    zIndex: 20,
-  },
-  floatingBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  floatingBtnCancel: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   // Bottom Navigation
   bottomNav: {
@@ -1095,52 +1020,6 @@ const styles = StyleSheet.create({
   headerVersionText: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.semibold,
-    color: colors.text.secondary,
-  },
-  versionModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  versionModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: borderRadius.xxl,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: height * 0.6,
-  },
-  versionList: {
-    padding: spacing.md,
-  },
-  versionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.xs,
-  },
-  versionItemActive: {
-    backgroundColor: colors.primaryLight,
-  },
-  versionItemInfo: {
-    flex: 1,
-  },
-  versionItemName: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  versionItemNameActive: {
-    color: colors.primary,
-  },
-  versionItemCode: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
   },
 });

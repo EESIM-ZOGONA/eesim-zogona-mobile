@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { BibleVerse, HIGHLIGHT_COLORS, HighlightColor } from '../../types';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { BibleVerse, HIGHLIGHT_COLORS, HIGHLIGHT_TEXT_COLORS, HighlightColor } from '../../types';
 import { colors, spacing, fontFamily, borderRadius } from '../../constants/theme';
 
 export interface VerseCardProps {
@@ -31,10 +31,13 @@ function VerseCardComponent({
   }, [onLongPress]);
 
   let backgroundColor = 'transparent';
+  let textColor: string | undefined;
+
   if (isSelected) {
     backgroundColor = colors.primaryLight;
   } else if (highlightColor) {
     backgroundColor = HIGHLIGHT_COLORS[highlightColor];
+    textColor = HIGHLIGHT_TEXT_COLORS[highlightColor];
   }
 
   return (
@@ -50,6 +53,7 @@ function VerseCardComponent({
           styles.verseNumber,
           isSelected && styles.verseNumberSelected,
           { marginTop: (lineHeight - fontSize) / 2 },
+          textColor && { color: textColor },
         ]}
       >
         {verse.verse}
@@ -59,6 +63,7 @@ function VerseCardComponent({
           styles.verseText,
           isSelected && styles.verseTextSelected,
           { fontSize, lineHeight },
+          textColor && { color: textColor },
         ]}
       >
         {verse.text}
@@ -83,7 +88,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    borderRadius: borderRadius.md,
   },
   verseNumber: {
     fontSize: 14,

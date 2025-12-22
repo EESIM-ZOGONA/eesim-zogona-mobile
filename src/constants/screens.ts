@@ -31,6 +31,7 @@ export const SCREENS = {
   MY_DONATIONS: 'MyDonations',
   MY_CELL: 'MyCell',
   MY_FAVORITES: 'MyFavorites',
+  MY_LIBRARY: 'MyLibrary',
   SOCIAL_MEDIA: 'SocialMedia',
 
   EVENTS: 'Events',
@@ -57,6 +58,7 @@ export const SCREENS = {
   READING_PLANS: 'ReadingPlans',
   READING_PLAN_DETAIL: 'ReadingPlanDetail',
   READING_PLAN_DAY: 'ReadingPlanDay',
+  READING_PLAN_READER: 'ReadingPlanReader',
 } as const;
 
 export type ScreenName = typeof SCREENS[keyof typeof SCREENS];

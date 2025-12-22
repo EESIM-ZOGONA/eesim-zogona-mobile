@@ -16,7 +16,7 @@ import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
 
 const { width } = Dimensions.get('window');
-const CHAPTER_SIZE = (width - spacing.lg * 2 - spacing.sm * 4) / 5;
+const CHAPTER_SIZE = (width - spacing.lg * 2 - spacing.md * 4) / 5;
 
 interface BibleBookScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BibleBook'>;
@@ -96,7 +96,7 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
             {/* Quick Actions */}
             <View style={styles.quickActions}>
               <TouchableOpacity
-                style={styles.quickAction}
+                style={[styles.quickAction, styles.quickActionPrimary]}
                 onPress={() => navigation.navigate(SCREENS.BIBLE_CHAPTER, {
                   bookId: book.id,
                   bookName: book.name,
@@ -104,19 +104,15 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
                 })}
                 activeOpacity={0.8}
               >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="play" size={18} color={colors.primary} />
-                </View>
-                <Text style={styles.quickActionText}>Commencer</Text>
+                <Ionicons name="play" size={16} color="#fff" />
+                <Text style={[styles.quickActionText, styles.quickActionTextPrimary]}>Commencer</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.quickAction}
                 activeOpacity={0.8}
               >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="bookmark-outline" size={18} color={colors.primary} />
-                </View>
+                <Ionicons name="bookmark-outline" size={18} color={colors.primary} />
                 <Text style={styles.quickActionText}>Favoris</Text>
               </TouchableOpacity>
 
@@ -124,9 +120,7 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
                 style={styles.quickAction}
                 activeOpacity={0.8}
               >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="share-outline" size={18} color={colors.primary} />
-                </View>
+                <Ionicons name="share-outline" size={18} color={colors.primary} />
                 <Text style={styles.quickActionText}>Partager</Text>
               </TouchableOpacity>
             </View>
@@ -249,8 +243,8 @@ const styles = StyleSheet.create({
   // Quick Actions
   quickActions: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
   },
   quickAction: {
     flex: 1,
@@ -258,22 +252,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    backgroundColor: '#fff',
+    borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
-  },
-  quickActionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
   },
   quickActionText: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
+  },
+  quickActionPrimary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  quickActionTextPrimary: {
+    color: '#fff',
   },
   // Section Header
   sectionHeader: {
@@ -305,20 +300,25 @@ const styles = StyleSheet.create({
   },
   // Chapters Grid
   chaptersRow: {
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   chapterCard: {
     width: CHAPTER_SIZE,
     height: CHAPTER_SIZE,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    backgroundColor: '#fff',
+    borderRadius: CHAPTER_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   chapterNumber: {
     fontSize: fontSize.lg,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.primary,
+    fontFamily: fontFamily.bold,
+    color: colors.primary,
   },
 });

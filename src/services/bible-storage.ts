@@ -7,11 +7,12 @@ const STORAGE_KEYS = {
   BOOKMARKS: '@bible_bookmarks',
   FONT_SIZE: '@bible_font_size',
   RECENT_COLORS: '@bible_recent_colors',
+  COLOR_USAGE: '@bible_color_usage',
 } as const;
 
 const DEFAULT_FONT_SIZE_INDEX = 2;
-const DEFAULT_RECENT_COLORS: HighlightColor[] = ['yellow', 'green', 'blue'];
-const MAX_RECENT_COLORS = 3;
+const ALL_COLORS: HighlightColor[] = ['yellow', 'green', 'red', 'pink', 'violet'];
+const DEFAULT_RECENT_COLORS: HighlightColor[] = ['yellow', 'green', 'red', 'pink', 'violet'];
 
 export async function getHighlights(): Promise<VerseHighlight[]> {
   try {
@@ -200,10 +201,31 @@ export async function saveFontSizeIndex(index: number): Promise<void> {
   }
 }
 
+export async function getColorUsage(): Promise<Record<HighlightColor, number>> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.COLOR_USAGE);
+    if (data) {
+      return JSON.parse(data);
+    }
+    const defaultUsage: Record<HighlightColor, number> = {
+      yellow: 0,
+      green: 0,
+      red: 0,
+      pink: 0,
+      violet: 0,
+    };
+    return defaultUsage;
+  } catch (error) {
+    console.error('Error getting color usage:', error);
+    return { yellow: 0, green: 0, red: 0, pink: 0, violet: 0 };
+  }
+}
+
 export async function getRecentColors(): Promise<HighlightColor[]> {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.RECENT_COLORS);
-    return data ? JSON.parse(data) : DEFAULT_RECENT_COLORS;
+    const usage = await getColorUsage();
+    const sorted = ALL_COLORS.slice().sort((a, b) => usage[b] - usage[a]);
+    return sorted;
   } catch (error) {
     console.error('Error getting recent colors:', error);
     return DEFAULT_RECENT_COLORS;
@@ -212,10 +234,9 @@ export async function getRecentColors(): Promise<HighlightColor[]> {
 
 export async function updateRecentColors(color: HighlightColor): Promise<void> {
   try {
-    const recentColors = await getRecentColors();
-    const filtered = recentColors.filter((c) => c !== color);
-    const updated = [color, ...filtered].slice(0, MAX_RECENT_COLORS);
-    await AsyncStorage.setItem(STORAGE_KEYS.RECENT_COLORS, JSON.stringify(updated));
+    const usage = await getColorUsage();
+    usage[color] = (usage[color] || 0) + 1;
+    await AsyncStorage.setItem(STORAGE_KEYS.COLOR_USAGE, JSON.stringify(usage));
   } catch (error) {
     console.error('Error updating recent colors:', error);
     throw error;
@@ -229,6 +250,7 @@ export async function clearAllBibleData(): Promise<void> {
       AsyncStorage.removeItem(STORAGE_KEYS.BOOKMARKS),
       AsyncStorage.removeItem(STORAGE_KEYS.FONT_SIZE),
       AsyncStorage.removeItem(STORAGE_KEYS.RECENT_COLORS),
+      AsyncStorage.removeItem(STORAGE_KEYS.COLOR_USAGE),
     ]);
   } catch (error) {
     console.error('Error clearing Bible data:', error);

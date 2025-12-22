@@ -223,6 +223,15 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               iconBg="#fce7f3"
               iconColor="#db2777"
             />
+            <View style={styles.menuDivider} />
+            <MenuItem
+              icon="library-outline"
+              title="Ma bibliotheque"
+              subtitle="Versets, notes et plans de lecture"
+              onPress={() => navigation.navigate('MyLibrary')}
+              iconBg="#e0e7ff"
+              iconColor="#4f46e5"
+            />
           </View>
         </View>
 

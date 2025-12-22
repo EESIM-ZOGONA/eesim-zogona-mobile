@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,17 @@ import {
   ScrollView,
   Image,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, ReadingPlan, ReadingPlanCategory } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { readingPlans, calculateProgress } from '../../data/reading-plans-data';
+import { RootStackParamList, ReadingPlan, ReadingPlanCategory, UserReadingPlan } from '../../types';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import { useReadingPlans, useReadingProgress } from '../../hooks';
 
 const { width } = Dimensions.get('window');
 
@@ -29,86 +32,129 @@ const categories: { key: ReadingPlanCategory | 'all'; label: string; icon: keyof
   { key: 'debutant', label: 'Débutant', icon: 'leaf' },
   { key: 'thematique', label: 'Thématique', icon: 'bulb' },
   { key: 'livre', label: 'Par Livre', icon: 'book' },
+  { key: 'annuel', label: 'Annuel', icon: 'calendar' },
 ];
 
-// Mock: plan en cours (à remplacer par état persistant)
-const activePlanId = 'debutant-7-jours';
+function ActivePlanCard({
+  userPlan,
+  plan,
+  onPress
+}: {
+  userPlan: UserReadingPlan;
+  plan: ReadingPlan | undefined;
+  onPress: () => void;
+}) {
+  const { progress } = useReadingProgress({ userPlanId: userPlan.id });
+
+  if (!plan) return null;
+
+  return (
+    <TouchableOpacity
+      style={styles.featuredCard}
+      onPress={onPress}
+      activeOpacity={0.95}
+    >
+      <Image
+        source={{ uri: plan.imageUrl || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800' }}
+        style={styles.featuredImage}
+      />
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.85)']}
+        style={styles.featuredGradient}
+      />
+
+      <View style={styles.featuredBadge}>
+        <Ionicons name="checkmark-circle" size={12} color="#22c55e" />
+        <Text style={styles.featuredBadgeText}>
+          {userPlan.status === 'paused' ? 'EN PAUSE' : 'EN COURS'}
+        </Text>
+      </View>
+
+      <View style={styles.featuredDateBadge}>
+        <Text style={styles.featuredDateMonth}>JOUR</Text>
+        <Text style={styles.featuredDateDay}>{userPlan.currentDay}</Text>
+      </View>
+
+      <View style={styles.featuredContent}>
+        <Text style={styles.featuredTitle} numberOfLines={2}>{plan.title}</Text>
+        <Text style={styles.featuredDesc} numberOfLines={2}>{plan.description}</Text>
+
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
+          </View>
+          <Text style={styles.progressText}>{progress.completedDays}/{progress.totalDays}</Text>
+        </View>
+
+        <View style={styles.featuredAction}>
+          <Text style={styles.featuredActionText}>
+            {userPlan.status === 'paused' ? 'Reprendre' : 'Continuer'}
+          </Text>
+          <Ionicons name="arrow-forward" size={16} color="#fff" />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ReadingPlanCategory | 'all'>('all');
 
-  const activePlan = readingPlans.find(p => p.id === activePlanId);
+  const {
+    availablePlans,
+    activePlans,
+    loading,
+    refresh,
+    getPlanById,
+  } = useReadingPlans();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  const activeUserPlan = activePlans.find(p => p.status === 'active') || activePlans[0];
+  const activePlan = activeUserPlan ? getPlanById(activeUserPlan.planId) : undefined;
 
   const filteredPlans = useMemo(() => {
-    return readingPlans.filter((plan) => {
+    return availablePlans.filter((plan) => {
       const matchesSearch = plan.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         plan.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = selectedCategory === 'all' || plan.category === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const isNotActive = !activeUserPlan || plan.id !== activeUserPlan.planId;
+      return matchesSearch && matchesCategory && isNotActive;
     });
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, availablePlans, activeUserPlan]);
 
-  const otherPlans = filteredPlans.filter(p => p.id !== activePlanId);
-
-  const renderActivePlan = () => {
-    if (!activePlan) return null;
-    const progress = calculateProgress(activePlan);
-
-    return (
-      <TouchableOpacity
-        style={styles.featuredCard}
-        onPress={() => navigation.navigate('ReadingPlanDetail', { plan: activePlan })}
-        activeOpacity={0.95}
-      >
-        <Image
-          source={{ uri: activePlan.imageUrl || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800' }}
-          style={styles.featuredImage}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.85)']}
-          style={styles.featuredGradient}
-        />
-
-        {/* Active badge */}
-        <View style={styles.featuredBadge}>
-          <Ionicons name="checkmark-circle" size={12} color="#22c55e" />
-          <Text style={styles.featuredBadgeText}>EN COURS</Text>
-        </View>
-
-        {/* Duration badge */}
-        <View style={styles.featuredDateBadge}>
-          <Text style={styles.featuredDateMonth}>JOURS</Text>
-          <Text style={styles.featuredDateDay}>{activePlan.duration}</Text>
-        </View>
-
-        {/* Content */}
-        <View style={styles.featuredContent}>
-          <Text style={styles.featuredTitle} numberOfLines={2}>{activePlan.title}</Text>
-          <Text style={styles.featuredDesc} numberOfLines={2}>{activePlan.description}</Text>
-
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
-            </View>
-            <Text style={styles.progressText}>{progress.completed}/{progress.total}</Text>
-          </View>
-
-          <View style={styles.featuredAction}>
-            <Text style={styles.featuredActionText}>Continuer</Text>
-            <Ionicons name="arrow-forward" size={16} color="#fff" />
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+  const handlePlanPress = (plan: ReadingPlan) => {
+    const userPlan = activePlans.find(up => up.planId === plan.id);
+    navigation.navigate(SCREENS.READING_PLAN_DETAIL, { plan, userPlanId: userPlan?.id });
   };
 
-  const renderPlanItem = ({ item, index }: { item: ReadingPlan; index: number }) => {
+  const handleActivePlanPress = () => {
+    if (activeUserPlan && activePlan) {
+      navigation.navigate(SCREENS.READING_PLAN_DETAIL, {
+        plan: activePlan,
+        userPlanId: activeUserPlan.id
+      });
+    }
+  };
+
+  const renderPlanItem = ({ item }: { item: ReadingPlan }) => {
     return (
       <TouchableOpacity
         style={styles.planCard}
-        onPress={() => navigation.navigate('ReadingPlanDetail', { plan: item })}
+        onPress={() => handlePlanPress(item)}
         activeOpacity={0.9}
       >
         <Image
@@ -120,7 +166,6 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
           style={styles.planGradient}
         />
 
-        {/* Category badge */}
         <View style={styles.planBadge}>
           <Ionicons
             name={categories.find(c => c.key === item.category)?.icon || 'book'}
@@ -132,7 +177,6 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
           </Text>
         </View>
 
-        {/* Content */}
         <View style={styles.planContent}>
           <Text style={styles.planTitle} numberOfLines={2}>{item.title}</Text>
           <View style={styles.planMeta}>
@@ -144,9 +188,19 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -159,7 +213,6 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
         <View style={styles.headerRight} />
       </View>
 
-      {/* Search */}
       <View style={styles.searchContainer}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={20} color={colors.text.tertiary} />
@@ -178,7 +231,6 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
         </View>
       </View>
 
-      {/* Categories */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -197,8 +249,8 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
           >
             <Ionicons
               name={cat.icon}
-              size={16}
-              color={selectedCategory === cat.key ? '#fff' : colors.text.secondary}
+              size={18}
+              color={selectedCategory === cat.key ? '#fff' : colors.text.primary}
             />
             <Text
               style={[
@@ -213,20 +265,33 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
       </ScrollView>
 
       <FlatList
-        data={otherPlans}
+        data={filteredPlans}
         renderItem={renderPlanItem}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.planRow}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+          />
+        }
         ListHeaderComponent={() => (
           <>
-            {activePlan && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Votre plan en cours</Text>
-              </View>
+            {activeUserPlan && activePlan && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Votre plan en cours</Text>
+                </View>
+                <ActivePlanCard
+                  userPlan={activeUserPlan}
+                  plan={activePlan}
+                  onPress={handleActivePlanPress}
+                />
+              </>
             )}
-            {renderActivePlan()}
-            {otherPlans.length > 0 && (
+            {filteredPlans.length > 0 && (
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Découvrir d'autres plans</Text>
               </View>
@@ -256,7 +321,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  // Header
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,7 +355,6 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 44,
   },
-  // Search
   searchContainer: {
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.md,
@@ -301,7 +375,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.xs,
   },
-  // Categories
   categoriesScroll: {
     marginBottom: spacing.md,
   },
@@ -312,25 +385,27 @@ const styles = StyleSheet.create({
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: '#fff',
     marginRight: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
   },
   categoryChipActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   categoryChipText: {
     fontSize: fontSize.sm,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.primary,
   },
   categoryChipTextActive: {
     color: '#fff',
   },
-  // List
   listContent: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
@@ -344,7 +419,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
   },
-  // Featured Card (Active Plan)
   featuredCard: {
     height: 280,
     borderRadius: borderRadius.xxl,
@@ -456,7 +530,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: '#fff',
   },
-  // Plan Card Grid
   planRow: {
     justifyContent: 'space-between',
     marginBottom: spacing.md,
@@ -515,7 +588,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: 'rgba(255,255,255,0.8)',
   },
-  // Empty
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: spacing.xxxl,

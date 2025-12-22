@@ -188,37 +188,39 @@ export function VideoPlayerScreen({ navigation, route }: VideoPlayerScreenProps)
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
-      {/* Video Player */}
-      <View style={styles.videoContainer}>
-        <YoutubePlayer
-          height={VIDEO_HEIGHT}
-          width={width}
-          play={playing}
-          videoId={youtubeId}
-          onChangeState={onStateChange}
-          onReady={onReady}
-          webViewProps={{
-            allowsInlineMediaPlayback: true,
-            mediaPlaybackRequiresUserAction: false,
-          }}
-        />
+      {/* Video Player Container with Safe Area */}
+      <View style={[styles.videoWrapper, { paddingTop: insets.top }]}>
+        <View style={styles.videoContainer}>
+          <YoutubePlayer
+            height={VIDEO_HEIGHT}
+            width={width}
+            play={playing}
+            videoId={youtubeId}
+            onChangeState={onStateChange}
+            onReady={onReady}
+            webViewProps={{
+              allowsInlineMediaPlayback: true,
+              mediaPlaybackRequiresUserAction: false,
+            }}
+          />
 
-        {loading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#fff" />
-          </View>
-        )}
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
 
-        {/* Back button */}
-        <TouchableOpacity
-          style={[styles.backButton, { top: insets.top + spacing.sm }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+          {/* Back button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -358,6 +360,9 @@ const styles = StyleSheet.create({
   },
 
   // Video Player
+  videoWrapper: {
+    backgroundColor: '#000',
+  },
   videoContainer: {
     width: '100%',
     height: VIDEO_HEIGHT,
@@ -372,6 +377,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
+    top: spacing.sm,
     left: spacing.md,
     width: 44,
     height: 44,

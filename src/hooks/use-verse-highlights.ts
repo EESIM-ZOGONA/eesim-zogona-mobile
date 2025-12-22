@@ -28,7 +28,7 @@ export function useVerseHighlights({
   chapter,
 }: UseVerseHighlightsOptions): UseVerseHighlightsReturn {
   const [highlights, setHighlights] = useState<Map<string, HighlightColor>>(new Map());
-  const [recentColors, setRecentColors] = useState<HighlightColor[]>(['yellow', 'green', 'blue']);
+  const [recentColors, setRecentColors] = useState<HighlightColor[]>(['yellow', 'green', 'red', 'pink', 'violet']);
   const [loading, setLoading] = useState(true);
 
   const loadHighlights = useCallback(async () => {
