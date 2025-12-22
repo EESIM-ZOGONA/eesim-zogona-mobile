@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Alert,
@@ -31,16 +31,10 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
   const handleStartPlan = () => {
     Alert.alert(
       'Commencer le plan',
-      `Voulez-vous commencer "${plan.title}" ? Vous recevrez un rappel quotidien.`,
+      `Voulez-vous commencer "${plan.title}" ?`,
       [
         { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Commencer',
-          onPress: () => {
-            // TODO: Persist start date and setup notifications
-            console.log('Starting plan:', plan.id);
-          },
-        },
+        { text: 'Commencer', onPress: () => console.log('Starting plan:', plan.id) },
       ]
     );
   };
@@ -53,120 +47,115 @@ export function ReadingPlanDetailScreen({ navigation, route }: ReadingPlanDetail
     setCompletedDays(prev =>
       prev.includes(dayId) ? prev.filter(id => id !== dayId) : [...prev, dayId]
     );
-    // TODO: Persist to storage
+  };
+
+  const renderDayItem = ({ item: day }: { item: ReadingPlanDay }) => {
+    const isCompleted = completedDays.includes(day.id);
+    return (
+      <TouchableOpacity
+        style={[styles.dayCard, isCompleted && styles.dayCardCompleted]}
+        onPress={() => handleDayPress(day)}
+        activeOpacity={0.8}
+      >
+        <TouchableOpacity
+          style={[styles.dayCheckbox, isCompleted && styles.dayCheckboxCompleted]}
+          onPress={() => toggleDayComplete(day.id)}
+          activeOpacity={0.8}
+        >
+          {isCompleted && <Ionicons name="checkmark" size={16} color="#fff" />}
+        </TouchableOpacity>
+        <View style={styles.dayInfo}>
+          <Text style={[styles.dayNumber, isCompleted && styles.dayNumberCompleted]}>
+            Jour {day.day}
+          </Text>
+          <Text style={[styles.dayTitle, isCompleted && styles.dayTitleCompleted]} numberOfLines={1}>
+            {day.title}
+          </Text>
+          <Text style={styles.dayReadings} numberOfLines={1}>
+            {day.readings.map(r =>
+              r.verseStart
+                ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`
+                : `${r.bookName} ${r.chapter}`
+            ).join(', ')}
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={isCompleted ? colors.text.tertiary : colors.text.secondary}
+        />
+      </TouchableOpacity>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero Image */}
-        <View style={styles.heroContainer}>
-          <Image source={{ uri: plan.imageUrl }} style={styles.heroImage} />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.8)']}
-            style={styles.heroGradient}
-          />
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>{plan.title}</Text>
-            <Text style={styles.heroDesc}>{plan.description}</Text>
-            <View style={styles.heroMeta}>
-              <View style={styles.heroMetaItem}>
-                <Ionicons name="calendar-outline" size={16} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.heroMetaText}>{plan.duration} jours</Text>
-              </View>
-              <View style={styles.heroMetaItem}>
-                <Ionicons name="book-outline" size={16} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.heroMetaText}>{plan.days.length} lectures</Text>
+      <FlatList
+        data={plan.days}
+        renderItem={renderDayItem}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={() => (
+          <>
+            {/* Hero Image */}
+            <View style={styles.heroContainer}>
+              <Image source={{ uri: plan.imageUrl }} style={styles.heroImage} />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
+                style={styles.heroGradient}
+              />
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+              <View style={styles.heroContent}>
+                <View style={styles.heroBadge}>
+                  <Ionicons name="calendar" size={12} color={colors.primary} />
+                  <Text style={styles.heroBadgeText}>{plan.duration} jours</Text>
+                </View>
+                <Text style={styles.heroTitle}>{plan.title}</Text>
+                <Text style={styles.heroDesc} numberOfLines={2}>{plan.description}</Text>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressTitle}>Votre progression</Text>
-            <Text style={styles.progressPercentage}>{progress.percentage}%</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
-          </View>
-          <Text style={styles.progressSubtext}>
-            {progress.completed} sur {progress.total} jours complétés
-          </Text>
-        </View>
+            {/* Progress Card */}
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Votre progression</Text>
+                <Text style={styles.progressPercentage}>{progress.percentage}%</Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
+              </View>
+              <Text style={styles.progressSubtext}>
+                {progress.completed} sur {progress.total} jours complétés
+              </Text>
+            </View>
 
-        {/* Start Button */}
-        {!plan.startDate && (
-          <TouchableOpacity
-            style={styles.startButton}
-            onPress={handleStartPlan}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="play" size={20} color="#fff" />
-            <Text style={styles.startButtonText}>Commencer ce plan</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Days List */}
-        <View style={styles.daysSection}>
-          <Text style={styles.daysSectionTitle}>Programme</Text>
-          {plan.days.map((day) => {
-            const isCompleted = completedDays.includes(day.id);
-            return (
+            {/* Start Button */}
+            {!plan.startDate && (
               <TouchableOpacity
-                key={day.id}
-                style={[styles.dayCard, isCompleted && styles.dayCardCompleted]}
-                onPress={() => handleDayPress(day)}
-                activeOpacity={0.8}
+                style={styles.startButton}
+                onPress={handleStartPlan}
+                activeOpacity={0.9}
               >
-                <View style={styles.dayLeft}>
-                  <TouchableOpacity
-                    style={[styles.dayCheckbox, isCompleted && styles.dayCheckboxCompleted]}
-                    onPress={() => toggleDayComplete(day.id)}
-                    activeOpacity={0.8}
-                  >
-                    {isCompleted && (
-                      <Ionicons name="checkmark" size={16} color="#fff" />
-                    )}
-                  </TouchableOpacity>
-                  <View style={styles.dayInfo}>
-                    <Text style={[styles.dayNumber, isCompleted && styles.dayNumberCompleted]}>
-                      Jour {day.day}
-                    </Text>
-                    <Text style={[styles.dayTitle, isCompleted && styles.dayTitleCompleted]}>
-                      {day.title}
-                    </Text>
-                    <Text style={styles.dayReadings} numberOfLines={1}>
-                      {day.readings.map(r =>
-                        r.verseStart
-                          ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`
-                          : `${r.bookName} ${r.chapter}`
-                      ).join(', ')}
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={isCompleted ? colors.text.tertiary : colors.text.secondary}
-                />
+                <Ionicons name="play" size={20} color="#fff" />
+                <Text style={styles.startButtonText}>Commencer ce plan</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+            )}
+
+            {/* Section Title */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Programme</Text>
+              <Text style={styles.sectionSubtitle}>{plan.days.length} lectures</Text>
+            </View>
+          </>
+        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -176,15 +165,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     paddingBottom: spacing.xxl,
   },
   // Hero
   heroContainer: {
-    height: 280,
+    height: 260,
     position: 'relative',
   },
   heroImage: {
@@ -201,7 +187,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -212,34 +198,35 @@ const styles = StyleSheet.create({
     right: 0,
     padding: spacing.xl,
   },
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#fff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  heroBadgeText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
+    color: colors.primary,
+  },
   heroTitle: {
     fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
     color: '#fff',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   heroDesc: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.regular,
     color: 'rgba(255,255,255,0.9)',
-    marginBottom: spacing.md,
   },
-  heroMeta: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  heroMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  heroMetaText: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.medium,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  // Progress
-  progressSection: {
+  // Progress Card
+  progressCard: {
     margin: spacing.xl,
     padding: spacing.lg,
     backgroundColor: colors.surface,
@@ -261,7 +248,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.primary,
   },
-  progressBar: {
+  progressBarContainer: {
     height: 8,
     backgroundColor: colors.background,
     borderRadius: 4,
@@ -285,7 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     marginHorizontal: spacing.xl,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
@@ -295,33 +282,37 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: '#fff',
   },
-  // Days
-  daysSection: {
+  // Section Header
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
   },
-  daysSectionTitle: {
+  sectionTitle: {
     fontSize: fontSize.lg,
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
-    marginBottom: spacing.md,
   },
+  sectionSubtitle: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
+  // Day Card
   dayCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
+    gap: spacing.md,
   },
   dayCardCompleted: {
     backgroundColor: colors.primaryLight,
-  },
-  dayLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.md,
   },
   dayCheckbox: {
     width: 28,

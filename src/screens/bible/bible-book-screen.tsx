@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,7 +13,10 @@ import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+
+const { width } = Dimensions.get('window');
+const CHAPTER_SIZE = (width - spacing.lg * 2 - spacing.sm * 4) / 5;
 
 interface BibleBookScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BibleBook'>;
@@ -28,7 +32,7 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
   const renderChapterItem = ({ item: chapter }: { item: number }) => (
     <TouchableOpacity
       style={styles.chapterCard}
-      onPress={() => navigation.navigate('BibleChapter', {
+      onPress={() => navigation.navigate(SCREENS.BIBLE_CHAPTER, {
         bookId: book.id,
         bookName: book.name,
         chapter,
@@ -41,22 +45,6 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{book.name}</Text>
-          <Text style={styles.headerSubtitle}>{book.chapters} chapitres</Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
-
       <FlatList
         data={chapters}
         renderItem={renderChapterItem}
@@ -64,28 +52,84 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
         numColumns={5}
         ListHeaderComponent={() => (
           <>
-            {/* Book Info Card */}
+            {/* Hero Header */}
             <LinearGradient
               colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.bookInfoCard}
+              style={styles.heroCard}
             >
-              <View style={styles.bookIconWrap}>
-                <Ionicons name="book" size={32} color={colors.primary} />
-              </View>
-              <Text style={styles.bookInfoName}>{book.name}</Text>
-              <Text style={styles.bookInfoTestament}>
-                {book.testament === 'old' ? 'Ancien Testament' : 'Nouveau Testament'}
-              </Text>
-              <View style={styles.bookInfoStats}>
-                <View style={styles.bookInfoStat}>
-                  <Text style={styles.bookInfoStatValue}>{book.chapters}</Text>
-                  <Text style={styles.bookInfoStatLabel}>Chapitres</Text>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+
+              <View style={styles.heroContent}>
+                <View style={styles.bookIconWrap}>
+                  <Ionicons name="book" size={32} color={colors.primary} />
+                </View>
+
+                <Text style={styles.bookName}>{book.name}</Text>
+                <Text style={styles.bookTestament}>
+                  {book.testament === 'old' ? 'Ancien Testament' : 'Nouveau Testament'}
+                </Text>
+
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{book.chapters}</Text>
+                    <Text style={styles.statLabel}>Chapitres</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{book.abbrev}</Text>
+                    <Text style={styles.statLabel}>Abréviation</Text>
+                  </View>
                 </View>
               </View>
               <View style={styles.cardAccent} />
+              <View style={styles.cardAccent2} />
             </LinearGradient>
+
+            {/* Quick Actions */}
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={styles.quickAction}
+                onPress={() => navigation.navigate(SCREENS.BIBLE_CHAPTER, {
+                  bookId: book.id,
+                  bookName: book.name,
+                  chapter: 1,
+                })}
+                activeOpacity={0.8}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="play" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.quickActionText}>Commencer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAction}
+                activeOpacity={0.8}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="bookmark-outline" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.quickActionText}>Favoris</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAction}
+                activeOpacity={0.8}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="share-outline" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.quickActionText}>Partager</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Section Title */}
             <View style={styles.sectionHeader}>
@@ -93,6 +137,7 @@ export function BibleBookScreen({ navigation, route }: BibleBookScreenProps) {
                 <View style={styles.sectionDot} />
                 <Text style={styles.sectionTitle}>Chapitres</Text>
               </View>
+              <Text style={styles.sectionSubtitle}>{book.chapters} au total</Text>
             </View>
           </>
         )}
@@ -109,50 +154,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  listContent: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.xxxl,
+  },
+  // Hero Card
+  heroCard: {
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    position: 'relative',
+    overflow: 'hidden',
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerCenter: {
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: fontSize.xs,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  headerRight: {
-    width: 44,
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
-  },
-  // Book Info Card
-  bookInfoCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
     marginBottom: spacing.lg,
+  },
+  heroContent: {
     alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
   },
   bookIconWrap: {
     width: 72,
@@ -163,47 +187,93 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  bookInfoName: {
+  bookName: {
     fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
     color: '#fff',
     marginBottom: spacing.xs,
+    textAlign: 'center',
   },
-  bookInfoTestament: {
+  bookTestament: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.medium,
     color: 'rgba(255,255,255,0.8)',
     marginBottom: spacing.lg,
   },
-  bookInfoStats: {
+  statsRow: {
     flexDirection: 'row',
-  },
-  bookInfoStat: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
   },
-  bookInfoStatValue: {
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  statValue: {
     fontSize: fontSize.xl,
     fontFamily: fontFamily.bold,
     color: '#fff',
   },
-  bookInfoStatLabel: {
+  statLabel: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
     color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   cardAccent: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    top: -40,
+    right: -40,
     width: 120,
     height: 120,
     borderRadius: 60,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    transform: [{ translateX: 40 }, { translateY: 40 }],
+  },
+  cardAccent2: {
+    position: 'absolute',
+    bottom: -30,
+    left: -30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  // Quick Actions
+  quickActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.md,
+  },
+  quickActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.primary,
   },
   // Section Header
   sectionHeader: {
@@ -228,19 +298,23 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.text.primary,
   },
+  sectionSubtitle: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
   // Chapters Grid
   chaptersRow: {
-    justifyContent: 'flex-start',
     gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   chapterCard: {
-    width: '18%',
-    aspectRatio: 1,
+    width: CHAPTER_SIZE,
+    height: CHAPTER_SIZE,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
   chapterNumber: {
     fontSize: fontSize.lg,

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { parseVerseReference } from '../../utils/verse-parser';
 
 interface MeditationDetailScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'MeditationDetail'>;
@@ -26,6 +27,18 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
   const { meditation } = route.params;
   const date = new Date(meditation.date);
   const formattedDate = `${date.getDate()} ${MONTHS_FULL[date.getMonth()]} ${date.getFullYear()}`;
+  const parsedVerseRef = parseVerseReference(meditation.verseRef);
+
+  const navigateToBible = () => {
+    if (parsedVerseRef) {
+      navigation.navigate('BibleChapter', {
+        bookId: parsedVerseRef.bookId,
+        bookName: parsedVerseRef.bookName,
+        chapter: parsedVerseRef.chapter,
+        scrollToVerse: parsedVerseRef.verseStart,
+      });
+    }
+  };
 
   const shareMeditation = async () => {
     try {
@@ -95,7 +108,11 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
           </View>
         </View>
 
-        <View style={styles.verseCard}>
+        <TouchableOpacity
+          style={styles.verseCard}
+          onPress={navigateToBible}
+          activeOpacity={parsedVerseRef ? 0.8 : 1}
+        >
           <View style={styles.verseQuoteWrap}>
             <Text style={styles.verseQuote}>"</Text>
           </View>
@@ -103,8 +120,17 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
           <View style={styles.verseRefWrap}>
             <View style={styles.verseRefLine} />
             <Text style={styles.verseRef}>{meditation.verseRef}</Text>
+            {parsedVerseRef && (
+              <Ionicons name="open-outline" size={14} color={colors.primary} style={{ marginLeft: 6 }} />
+            )}
           </View>
-        </View>
+          {parsedVerseRef && (
+            <View style={styles.readInBibleBadge}>
+              <Ionicons name="book-outline" size={12} color={colors.primary} />
+              <Text style={styles.readInBibleText}>Lire dans la Bible</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Content Section */}
         <View style={styles.sectionHeader}>
@@ -350,6 +376,22 @@ const styles = StyleSheet.create({
   verseRef: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.bold,
+    color: colors.primary,
+  },
+  readInBibleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+  },
+  readInBibleText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
     color: colors.primary,
   },
   // Content Card

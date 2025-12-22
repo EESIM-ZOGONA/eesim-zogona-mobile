@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +17,8 @@ import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, NoteCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+
+const { height } = Dimensions.get('window');
 
 interface NoteEditScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -32,12 +35,33 @@ const categoryOptions: { key: NoteCategory; label: string; icon: keyof typeof Io
 
 export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
   const existingNote = route.params?.note;
+  const initialVerseRef = route.params?.linkedVerseRef;
+  const prefillTitle = route.params?.prefillTitle;
+  const prefillContent = route.params?.prefillContent;
   const isEditing = !!existingNote;
 
-  const [title, setTitle] = useState(existingNote?.title || '');
-  const [content, setContent] = useState(existingNote?.content || '');
+  const [title, setTitle] = useState(existingNote?.title || prefillTitle || '');
+  const [content, setContent] = useState(existingNote?.content || prefillContent || '');
   const [category, setCategory] = useState<NoteCategory>(existingNote?.category || 'meditation');
-  const [linkedVerseRef, setLinkedVerseRef] = useState(existingNote?.linkedVerseRef || '');
+  const [linkedVerseRef, setLinkedVerseRef] = useState(existingNote?.linkedVerseRef || initialVerseRef || '');
+  const [showOptions, setShowOptions] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const contentInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardWillShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -63,8 +87,6 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
     };
 
     console.log('Saving note:', noteData);
-
-    // Go back after save
     navigation.goBack();
   };
 
@@ -83,110 +105,157 @@ export function NoteEditScreen({ navigation, route }: NoteEditScreenProps) {
     }
   };
 
+  const currentCategory = categoryOptions.find(c => c.key === category);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* Minimal Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.cancelButton}
+          style={styles.headerButton}
           onPress={handleCancel}
           activeOpacity={0.7}
         >
-          <Text style={styles.cancelButtonText}>Annuler</Text>
+          <Ionicons name="close" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isEditing ? 'Modifier' : 'Nouvelle note'}
-        </Text>
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={handleSave}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.saveButtonText}>Enregistrer</Text>
-        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.categoryButton}
+            onPress={() => setShowOptions(!showOptions)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={currentCategory?.icon || 'folder'} size={18} color={colors.primary} />
+            <Text style={styles.categoryButtonText}>{currentCategory?.label}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={handleSave}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="checkmark" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Category Options Dropdown */}
+      {showOptions && (
+        <View style={styles.optionsPanel}>
+          <View style={styles.optionSection}>
+            <Text style={styles.optionLabel}>Catégorie</Text>
+            <View style={styles.categoryGrid}>
+              {categoryOptions.map((cat) => (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[
+                    styles.categoryOption,
+                    category === cat.key && styles.categoryOptionActive,
+                  ]}
+                  onPress={() => {
+                    setCategory(cat.key);
+                    setShowOptions(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={cat.icon}
+                    size={18}
+                    color={category === cat.key ? '#fff' : colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      category === cat.key && styles.categoryOptionTextActive,
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.optionSection}>
+            <Text style={styles.optionLabel}>Référence biblique</Text>
+            <View style={styles.verseInputWrap}>
+              <Ionicons name="book-outline" size={18} color={colors.text.tertiary} />
+              <TextInput
+                style={styles.verseInput}
+                placeholder="Ex: Jean 3:16"
+                placeholderTextColor={colors.text.tertiary}
+                value={linkedVerseRef}
+                onChangeText={setLinkedVerseRef}
+                maxLength={50}
+              />
+            </View>
+          </View>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
+        keyboardVerticalOffset={0}
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Category Selection */}
-          <Text style={styles.label}>Catégorie</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContainer}
+        {/* Verse Reference Badge (if set) */}
+        {linkedVerseRef && !showOptions && (
+          <TouchableOpacity
+            style={styles.verseBadge}
+            onPress={() => setShowOptions(true)}
+            activeOpacity={0.8}
           >
-            {categoryOptions.map((cat) => (
-              <TouchableOpacity
-                key={cat.key}
-                style={[
-                  styles.categoryChip,
-                  category === cat.key && styles.categoryChipActive,
-                ]}
-                onPress={() => setCategory(cat.key)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={cat.icon}
-                  size={16}
-                  color={category === cat.key ? '#fff' : colors.text.secondary}
-                />
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    category === cat.key && styles.categoryChipTextActive,
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+            <Ionicons name="book" size={14} color={colors.primary} />
+            <Text style={styles.verseBadgeText}>{linkedVerseRef}</Text>
+          </TouchableOpacity>
+        )}
 
-          {/* Title Input */}
-          <Text style={styles.label}>Titre</Text>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Titre de la note..."
-            placeholderTextColor={colors.text.tertiary}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={100}
-          />
+        {/* Title Input - Large and prominent */}
+        <TextInput
+          style={styles.titleInput}
+          placeholder="Titre"
+          placeholderTextColor={colors.text.tertiary}
+          value={title}
+          onChangeText={setTitle}
+          maxLength={100}
+          returnKeyType="next"
+          onSubmitEditing={() => contentInputRef.current?.focus()}
+        />
 
-          {/* Verse Reference Input */}
-          <Text style={styles.label}>Référence biblique (optionnel)</Text>
-          <View style={styles.verseInputWrap}>
-            <Ionicons name="book-outline" size={20} color={colors.text.secondary} />
-            <TextInput
-              style={styles.verseInput}
-              placeholder="Ex: Jean 3:16"
-              placeholderTextColor={colors.text.tertiary}
-              value={linkedVerseRef}
-              onChangeText={setLinkedVerseRef}
-              maxLength={50}
-            />
-          </View>
-
-          {/* Content Input */}
-          <Text style={styles.label}>Contenu</Text>
-          <TextInput
-            style={styles.contentInput}
-            placeholder="Écrivez votre note ici..."
-            placeholderTextColor={colors.text.tertiary}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            textAlignVertical="top"
-          />
-        </ScrollView>
+        {/* Content Input - Maximum space */}
+        <TextInput
+          ref={contentInputRef}
+          style={[
+            styles.contentInput,
+            { minHeight: height - 280 - keyboardHeight },
+          ]}
+          placeholder="Commencez à écrire..."
+          placeholderTextColor={colors.text.tertiary}
+          value={content}
+          onChangeText={setContent}
+          multiline
+          textAlignVertical="top"
+          autoFocus={!isEditing}
+        />
       </KeyboardAvoidingView>
+
+      {/* Bottom Toolbar */}
+      <View style={[styles.toolbar, { marginBottom: keyboardHeight > 0 ? 0 : 0 }]}>
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => setShowOptions(!showOptions)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="options-outline" size={22} color={colors.text.secondary} />
+        </TouchableOpacity>
+
+        <View style={styles.wordCount}>
+          <Text style={styles.wordCountText}>
+            {content.length} caractères
+          </Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -196,98 +265,97 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  // Header - Minimal
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surface,
-  },
-  cancelButton: {
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-  },
-  cancelButtonText: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
-  },
-  headerTitle: {
-    fontSize: fontSize.lg,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
   },
-  saveButtonText: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: '#fff',
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
-  },
-  // Categories
-  categoriesContainer: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
-    paddingBottom: spacing.sm,
   },
-  categoryChip: {
+  categoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    backgroundColor: colors.primaryLight,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    marginRight: spacing.sm,
   },
-  categoryChipActive: {
-    backgroundColor: colors.primary,
-  },
-  categoryChipText: {
+  categoryButtonText: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
+    color: colors.primary,
   },
-  categoryChipTextActive: {
+  saveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Options Panel
+  optionsPanel: {
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  optionSection: {
+    marginBottom: spacing.lg,
+  },
+  optionLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primaryLight,
+  },
+  categoryOptionActive: {
+    backgroundColor: colors.primary,
+  },
+  categoryOptionText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.primary,
+  },
+  categoryOptionTextActive: {
     color: '#fff',
   },
-  // Title Input
-  titleInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.lg,
-    fontFamily: fontFamily.semibold,
-    color: colors.text.primary,
-  },
-  // Verse Input
   verseInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -300,16 +368,71 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.xs,
   },
-  // Content Input
+  // Keyboard View
+  keyboardView: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+  },
+  // Verse Badge
+  verseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.sm,
+  },
+  verseBadgeText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.medium,
+    color: colors.primary,
+  },
+  // Title Input - Large
+  titleInput: {
+    fontSize: fontSize.xxl,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  // Content Input - Maximum space
   contentInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.md,
+    flex: 1,
+    fontSize: fontSize.lg,
     fontFamily: fontFamily.regular,
     color: colors.text.primary,
-    minHeight: 200,
-    lineHeight: 24,
+    lineHeight: 28,
+    paddingBottom: spacing.xl,
+  },
+  // Toolbar
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface,
+    backgroundColor: colors.background,
+  },
+  toolbarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wordCount: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  wordCountText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
+    color: colors.text.tertiary,
   },
 });

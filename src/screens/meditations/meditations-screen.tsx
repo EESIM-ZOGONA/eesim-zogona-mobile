@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList, MeditationCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 import { useMeditations } from '../../hooks';
+import { parseVerseReference } from '../../utils/verse-parser';
 
 // Category icons mapping
 const categoryIcons: Record<MeditationCategory, keyof typeof Ionicons.glyphMap> = {
@@ -60,12 +60,22 @@ export function MeditationsScreen({ navigation }: MeditationsScreenProps) {
     );
   };
 
-  const openBibleReading = () => {
-    // Open YouVersion Bible App or website
-    Linking.openURL('https://www.bible.com/fr/reading-plans').catch(() => {
-      // Fallback to a Bible website if app not installed
-      Linking.openURL('https://www.bible.com/fr');
-    });
+  const openBible = () => {
+    navigation.navigate('Bible');
+  };
+
+  const navigateToTodayVerse = () => {
+    if (todayMeditation) {
+      const parsed = parseVerseReference(todayMeditation.verseRef);
+      if (parsed) {
+        navigation.navigate('BibleChapter', {
+          bookId: parsed.bookId,
+          bookName: parsed.bookName,
+          chapter: parsed.chapter,
+          scrollToVerse: parsed.verseStart,
+        });
+      }
+    }
   };
 
   const handleSeeMore = () => {
@@ -162,11 +172,14 @@ export function MeditationsScreen({ navigation }: MeditationsScreenProps) {
 
           <Text style={styles.todayTitle}>{todayMeditation.title}</Text>
 
-          <View style={styles.verseBox}>
+          <TouchableOpacity style={styles.verseBox} onPress={navigateToTodayVerse} activeOpacity={0.8}>
             <Text style={styles.verseQuote}>"</Text>
             <Text style={styles.todayVerse}>{todayMeditation.verse}</Text>
-            <Text style={styles.todayVerseRef}>{todayMeditation.verseRef}</Text>
-          </View>
+            <View style={styles.todayVerseRefWrap}>
+              <Text style={styles.todayVerseRef}>{todayMeditation.verseRef}</Text>
+              <Ionicons name="open-outline" size={12} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
+            </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.readButton}
@@ -186,13 +199,13 @@ export function MeditationsScreen({ navigation }: MeditationsScreenProps) {
           <TouchableOpacity
             style={styles.quickActionCard}
             activeOpacity={0.8}
-            onPress={openBibleReading}
+            onPress={openBible}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: colors.primaryLight }]}>
               <Ionicons name="book" size={22} color={colors.primary} />
             </View>
-            <Text style={styles.quickActionTitle}>Lecture Bible</Text>
-            <Text style={styles.quickActionSubtitle}>Plan quotidien</Text>
+            <Text style={styles.quickActionTitle}>Lire la Bible</Text>
+            <Text style={styles.quickActionSubtitle}>Louis Segond</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -442,11 +455,15 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 24,
   },
+  todayVerseRefWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
   todayVerseRef: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.bold,
     color: 'rgba(255,255,255,0.9)',
-    marginTop: spacing.sm,
   },
   readButton: {
     flexDirection: 'row',

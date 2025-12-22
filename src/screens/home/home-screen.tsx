@@ -10,6 +10,7 @@ import {
   Dimensions,
   ImageBackground,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,7 +25,7 @@ import { Avatar, VideoCardSkeleton, ProgramCardSkeleton, EventCardSkeleton, Hymn
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../context';
 import { mockEvents, mockProgramActivities, mockHymns } from '../../utils';
-import { api, VideoData } from '../../services';
+import { api, VideoData, getDailyVerse, BibleSearchResult } from '../../services';
 
 const { width } = Dimensions.get('window');
 
@@ -40,49 +41,8 @@ interface HomeScreenProps {
 const DAYS_SHORT = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 const MONTHS_SHORT = ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'];
 
-// Versets du jour - rotate based on day of year
-// bookId matches IDs in bible-data.ts, bookName for display
-const dailyVerses = [
-  { text: "Car Dieu a tant aimé le monde qu'il a donné son Fils unique, afin que quiconque croit en lui ne périsse point, mais qu'il ait la vie éternelle.", ref: "Jean 3:16", bookId: "jhn", bookName: "Jean", chapter: 3 },
-  { text: "L'Éternel est mon berger: je ne manquerai de rien.", ref: "Psaume 23:1", bookId: "psa", bookName: "Psaumes", chapter: 23 },
-  { text: "Je puis tout par celui qui me fortifie.", ref: "Philippiens 4:13", bookId: "php", bookName: "Philippiens", chapter: 4 },
-  { text: "Confie-toi en l'Éternel de tout ton cœur, et ne t'appuie pas sur ta sagesse.", ref: "Proverbes 3:5", bookId: "pro", bookName: "Proverbes", chapter: 3 },
-  { text: "Ne crains point, car je suis avec toi; ne sois pas effrayé, car je suis ton Dieu.", ref: "Ésaïe 41:10", bookId: "isa", bookName: "Ésaïe", chapter: 41 },
-  { text: "Car je connais les projets que j'ai formés sur vous, dit l'Éternel, projets de paix et non de malheur, afin de vous donner un avenir et de l'espérance.", ref: "Jérémie 29:11", bookId: "jer", bookName: "Jérémie", chapter: 29 },
-  { text: "Venez à moi, vous tous qui êtes fatigués et chargés, et je vous donnerai du repos.", ref: "Matthieu 11:28", bookId: "mat", bookName: "Matthieu", chapter: 11 },
-  { text: "L'Éternel est ma lumière et mon salut: de qui aurais-je crainte?", ref: "Psaume 27:1", bookId: "psa", bookName: "Psaumes", chapter: 27 },
-  { text: "Mais ceux qui se confient en l'Éternel renouvellent leur force. Ils prennent le vol comme les aigles.", ref: "Ésaïe 40:31", bookId: "isa", bookName: "Ésaïe", chapter: 40 },
-  { text: "Le fruit de l'Esprit, c'est l'amour, la joie, la paix, la patience, la bonté, la bénignité, la fidélité, la douceur, la tempérance.", ref: "Galates 5:22", bookId: "gal", bookName: "Galates", chapter: 5 },
-  { text: "Demandez, et l'on vous donnera; cherchez, et vous trouverez; frappez, et l'on vous ouvrira.", ref: "Matthieu 7:7", bookId: "mat", bookName: "Matthieu", chapter: 7 },
-  { text: "Car c'est par la grâce que vous êtes sauvés, par le moyen de la foi. Et cela ne vient pas de vous, c'est le don de Dieu.", ref: "Éphésiens 2:8", bookId: "eph", bookName: "Éphésiens", chapter: 2 },
-  { text: "L'amour est patient, il est plein de bonté; l'amour n'est point envieux; l'amour ne se vante point.", ref: "1 Corinthiens 13:4", bookId: "1co", bookName: "1 Corinthiens", chapter: 13 },
-  { text: "Ta parole est une lampe à mes pieds, et une lumière sur mon sentier.", ref: "Psaume 119:105", bookId: "psa", bookName: "Psaumes", chapter: 119 },
-  { text: "Celui qui demeure sous l'abri du Très-Haut repose à l'ombre du Tout-Puissant.", ref: "Psaume 91:1", bookId: "psa", bookName: "Psaumes", chapter: 91 },
-  { text: "Ayez confiance, j'ai vaincu le monde.", ref: "Jean 16:33", bookId: "jhn", bookName: "Jean", chapter: 16 },
-  { text: "Je suis le chemin, la vérité, et la vie. Nul ne vient au Père que par moi.", ref: "Jean 14:6", bookId: "jhn", bookName: "Jean", chapter: 14 },
-  { text: "L'Éternel est bon, un refuge au jour de la détresse; il connaît ceux qui se confient en lui.", ref: "Nahum 1:7", bookId: "nam", bookName: "Nahum", chapter: 1 },
-  { text: "Recommande ton sort à l'Éternel, mets en lui ta confiance, et il agira.", ref: "Psaume 37:5", bookId: "psa", bookName: "Psaumes", chapter: 37 },
-  { text: "Je suis la résurrection et la vie. Celui qui croit en moi vivra, quand même il serait mort.", ref: "Jean 11:25", bookId: "jhn", bookName: "Jean", chapter: 11 },
-  { text: "Et voici, je suis avec vous tous les jours, jusqu'à la fin du monde.", ref: "Matthieu 28:20", bookId: "mat", bookName: "Matthieu", chapter: 28 },
-  { text: "Car là où deux ou trois sont assemblés en mon nom, je suis au milieu d'eux.", ref: "Matthieu 18:20", bookId: "mat", bookName: "Matthieu", chapter: 18 },
-  { text: "Le Seigneur est fidèle, il vous affermira et vous préservera du malin.", ref: "2 Thessaloniciens 3:3", bookId: "2th", bookName: "2 Thessaloniciens", chapter: 3 },
-  { text: "Si quelqu'un a soif, qu'il vienne à moi, et qu'il boive.", ref: "Jean 7:37", bookId: "jhn", bookName: "Jean", chapter: 7 },
-  { text: "Béni soit l'homme qui se confie dans l'Éternel, et dont l'Éternel est l'espérance!", ref: "Jérémie 17:7", bookId: "jer", bookName: "Jérémie", chapter: 17 },
-  { text: "Dieu est pour nous un refuge et un appui, un secours qui ne manque jamais dans la détresse.", ref: "Psaume 46:2", bookId: "psa", bookName: "Psaumes", chapter: 46 },
-  { text: "Approchez-vous de Dieu, et il s'approchera de vous.", ref: "Jacques 4:8", bookId: "jas", bookName: "Jacques", chapter: 4 },
-  { text: "L'Éternel combattra pour vous; et vous, gardez le silence.", ref: "Exode 14:14", bookId: "exo", bookName: "Exode", chapter: 14 },
-  { text: "Heureux ceux qui procurent la paix, car ils seront appelés fils de Dieu!", ref: "Matthieu 5:9", bookId: "mat", bookName: "Matthieu", chapter: 5 },
-  { text: "En vérité, en vérité, je vous le dis, celui qui croit en moi a la vie éternelle.", ref: "Jean 6:47", bookId: "jhn", bookName: "Jean", chapter: 6 },
-  { text: "Voici, je me tiens à la porte, et je frappe. Si quelqu'un entend ma voix et ouvre la porte, j'entrerai chez lui.", ref: "Apocalypse 3:20", bookId: "rev", bookName: "Apocalypse", chapter: 3 },
-];
-
-const getDailyVerse = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const diff = now.getTime() - start.getTime();
-  const oneDay = 1000 * 60 * 60 * 24;
-  const dayOfYear = Math.floor(diff / oneDay);
-  return dailyVerses[dayOfYear % dailyVerses.length];
+const formatVerseRef = (verse: BibleSearchResult): string => {
+  return `${verse.bookName} ${verse.chapter}:${verse.verse}`;
 };
 
 export function HomeScreen({ navigation }: HomeScreenProps) {
@@ -90,11 +50,25 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(true);
-  const dailyVerse = getDailyVerse();
+  const [dailyVerse, setDailyVerse] = useState<BibleSearchResult | null>(null);
+  const [loadingVerse, setLoadingVerse] = useState(true);
 
   useEffect(() => {
     loadVideos();
+    loadDailyVerse();
   }, []);
+
+  const loadDailyVerse = async () => {
+    try {
+      setLoadingVerse(true);
+      const verse = await getDailyVerse();
+      setDailyVerse(verse);
+    } catch (error) {
+      console.error('Error loading daily verse:', error);
+    } finally {
+      setLoadingVerse(false);
+    }
+  };
 
   const loadVideos = async () => {
     try {
@@ -109,7 +83,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadVideos();
+    await Promise.all([loadVideos(), loadDailyVerse()]);
     setRefreshing(false);
   };
 
@@ -233,135 +207,120 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         </View>
 
         {/* Verset du Jour - Premium Card with Pattern */}
-        <TouchableOpacity
-          style={styles.verseCard}
-          onPress={() => navigation.navigate('BibleChapter', {
-            bookId: dailyVerse.bookId,
-            bookName: dailyVerse.bookName,
-            chapter: dailyVerse.chapter,
-          })}
-          activeOpacity={0.95}
-        >
-          <ImageBackground
-            source={{ uri: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800' }}
-            style={styles.verseBackground}
-            imageStyle={styles.verseBackgroundImage}
+        {dailyVerse && (
+          <TouchableOpacity
+            style={styles.verseCard}
+            onPress={() => navigation.navigate('BibleChapter', {
+              bookId: dailyVerse.bookId,
+              bookName: dailyVerse.bookName,
+              chapter: dailyVerse.chapter,
+              scrollToVerse: dailyVerse.verse,
+            })}
+            activeOpacity={0.95}
           >
-            <LinearGradient
-              colors={['rgba(3,10,127,0.92)', 'rgba(2,8,102,0.98)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.verseGradient}
+            <ImageBackground
+              source={{ uri: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800' }}
+              style={styles.verseBackground}
+              imageStyle={styles.verseBackgroundImage}
             >
-              {/* Decorative elements */}
-              <View style={styles.verseDecor}>
-                <View style={styles.verseDecorCircle} />
-                <View style={[styles.verseDecorCircle, styles.verseDecorCircle2]} />
-              </View>
-
-              <View style={styles.verseHeader}>
-                <View style={styles.verseLabelWrap}>
-                  <Ionicons name="sparkles" size={14} color="#fbbf24" />
-                  <Text style={styles.verseLabel}>VERSET DU JOUR</Text>
+              <LinearGradient
+                colors={['rgba(3,10,127,0.92)', 'rgba(2,8,102,0.98)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.verseGradient}
+              >
+                <View style={styles.verseDecor}>
+                  <View style={styles.verseDecorCircle} />
+                  <View style={[styles.verseDecorCircle, styles.verseDecorCircle2]} />
                 </View>
-                <TouchableOpacity
-                  style={styles.verseBookmark}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    navigation.navigate('NoteEdit', {
-                      note: undefined,
-                      linkedVerseRef: dailyVerse.ref,
-                    });
-                  }}
-                >
-                  <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.8)" />
-                </TouchableOpacity>
-              </View>
 
-              <View style={styles.verseQuoteIcon}>
-                <Text style={styles.quoteSymbol}>"</Text>
-              </View>
-
-              <Text style={styles.verseText}>
-                {dailyVerse.text}
-              </Text>
-
-              <View style={styles.verseFooter}>
-                <TouchableOpacity
-                  style={styles.verseRefWrap}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    navigation.navigate('BibleChapter', {
-                      bookId: dailyVerse.bookId,
-                      bookName: dailyVerse.bookName,
-                      chapter: dailyVerse.chapter,
-                    });
-                  }}
-                >
-                  <View style={styles.verseRefLine} />
-                  <Text style={styles.verseRef}>{dailyVerse.ref}</Text>
-                  <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.7)" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-                <View style={styles.verseActions}>
+                <View style={styles.verseHeader}>
+                  <View style={styles.verseLabelWrap}>
+                    <Ionicons name="sparkles" size={14} color="#fbbf24" />
+                    <Text style={styles.verseLabel}>VERSET DU JOUR</Text>
+                  </View>
                   <TouchableOpacity
-                    style={styles.verseActionBtn}
-                    onPress={async (e) => {
+                    style={styles.verseBookmark}
+                    onPress={(e) => {
                       e.stopPropagation();
-                      await Clipboard.setStringAsync(`"${dailyVerse.text}" - ${dailyVerse.ref}`);
-                    }}
-                  >
-                    <Ionicons name="copy-outline" size={16} color="rgba(255,255,255,0.7)" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.verseActionBtn}
-                    onPress={async (e) => {
-                      e.stopPropagation();
-                      await Share.share({
-                        message: `"${dailyVerse.text}"\n\n- ${dailyVerse.ref}\n\nPartagé depuis l'app EE/SIM Zogona`,
+                      const ref = formatVerseRef(dailyVerse);
+                      navigation.navigate('NoteEdit', {
+                        note: undefined,
+                        linkedVerseRef: ref,
+                        prefillTitle: `Réflexion sur ${ref}`,
+                        prefillContent: `"${dailyVerse.text}"\n\n`,
                       });
                     }}
                   >
-                    <Ionicons name="share-outline" size={16} color="rgba(255,255,255,0.7)" />
+                    <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.8)" />
                   </TouchableOpacity>
                 </View>
-              </View>
-            </LinearGradient>
-          </ImageBackground>
-        </TouchableOpacity>
 
-        {/* Plan de Lecture Section */}
-        <TouchableOpacity
-          style={styles.readingPlanCard}
-          onPress={() => navigation.navigate('ReadingPlans')}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.readingPlanGradient}
-          >
-            <View style={styles.readingPlanContent}>
-              <View style={styles.readingPlanLeft}>
-                <View style={styles.readingPlanBadge}>
-                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-                  <Text style={styles.readingPlanBadgeText}>Plan de lecture</Text>
+                <View style={styles.verseQuoteIcon}>
+                  <Text style={styles.quoteSymbol}>"</Text>
                 </View>
-                <Text style={styles.readingPlanTitle}>Découvrez la Bible</Text>
-                <Text style={styles.readingPlanDesc}>
-                  Suivez un plan guidé pour lire la Bible régulièrement
+
+                <Text style={styles.verseText}>
+                  {dailyVerse.text}
                 </Text>
-              </View>
-              <View style={styles.readingPlanIcon}>
-                <Ionicons name="book" size={40} color="rgba(255,255,255,0.3)" />
-              </View>
-            </View>
-            <View style={styles.readingPlanAction}>
-              <Text style={styles.readingPlanActionText}>Voir les plans</Text>
-              <Ionicons name="arrow-forward" size={16} color="#fff" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
+
+                <View style={styles.verseFooter}>
+                  <TouchableOpacity
+                    style={styles.verseRefWrap}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      navigation.navigate('BibleChapter', {
+                        bookId: dailyVerse.bookId,
+                        bookName: dailyVerse.bookName,
+                        chapter: dailyVerse.chapter,
+                        scrollToVerse: dailyVerse.verse,
+                      });
+                    }}
+                  >
+                    <View style={styles.verseRefLine} />
+                    <Text style={styles.verseRef}>{formatVerseRef(dailyVerse)}</Text>
+                    <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.7)" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                  <View style={styles.verseActions}>
+                    <TouchableOpacity
+                      style={styles.verseActionBtn}
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        const ref = formatVerseRef(dailyVerse);
+                        await Clipboard.setStringAsync(`"${dailyVerse.text}" - ${ref}`);
+                      }}
+                    >
+                      <Ionicons name="copy-outline" size={16} color="rgba(255,255,255,0.7)" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.verseActionBtn}
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        const ref = formatVerseRef(dailyVerse);
+                        await Share.share({
+                          message: `"${dailyVerse.text}"\n\n- ${ref}\n\nPartagé depuis l'app EE/SIM Zogona`,
+                        });
+                      }}
+                    >
+                      <Ionicons name="share-outline" size={16} color="rgba(255,255,255,0.7)" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </LinearGradient>
+            </ImageBackground>
+          </TouchableOpacity>
+        )}
+        {loadingVerse && (
+          <View style={styles.verseCardSkeleton}>
+            <LinearGradient
+              colors={['rgba(3,10,127,0.92)', 'rgba(2,8,102,0.98)']}
+              style={styles.verseGradientSkeleton}
+            >
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.verseLoadingText}>Chargement du verset...</Text>
+            </LinearGradient>
+          </View>
+        )}
 
         {/* TV Section - Featured */}
         <View style={styles.section}>
@@ -587,6 +546,40 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             })}
           </ScrollView>
         </View>
+
+        {/* Plan de Lecture Section */}
+        <TouchableOpacity
+          style={styles.readingPlanCard}
+          onPress={() => navigation.navigate('ReadingPlans')}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.readingPlanGradient}
+          >
+            <View style={styles.readingPlanContent}>
+              <View style={styles.readingPlanLeft}>
+                <View style={styles.readingPlanBadge}>
+                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+                  <Text style={styles.readingPlanBadgeText}>Plan de lecture</Text>
+                </View>
+                <Text style={styles.readingPlanTitle}>Découvrez la Bible</Text>
+                <Text style={styles.readingPlanDesc}>
+                  Suivez un plan guidé pour lire la Bible régulièrement
+                </Text>
+              </View>
+              <View style={styles.readingPlanIcon}>
+                <Ionicons name="book" size={40} color="rgba(255,255,255,0.3)" />
+              </View>
+            </View>
+            <View style={styles.readingPlanAction}>
+              <Text style={styles.readingPlanActionText}>Voir les plans</Text>
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
         {/* Dernieres Activites (Cantiques) */}
         <View style={styles.section}>
@@ -841,6 +834,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  verseCardSkeleton: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    height: 160,
+  },
+  verseGradientSkeleton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  verseLoadingText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: 'rgba(255,255,255,0.7)',
   },
   // Reading Plan Card
   readingPlanCard: {

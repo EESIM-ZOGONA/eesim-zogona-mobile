@@ -8,7 +8,7 @@ import { HymnsScreen } from '../screens/hymns';
 import { TVScreen } from '../screens/tv';
 import { ProgramScreen } from '../screens/program';
 import { ProfileScreen } from '../screens/profile';
-import { colors, fontSize, fontFamily, spacing, borderRadius } from '../constants/theme';
+import { colors, fontSize, fontFamily, spacing, SCREENS } from '../constants';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -25,7 +25,7 @@ export function TabNavigator() {
       }}
     >
       <Tab.Screen
-        name="HomeTab"
+        name={SCREENS.HOME_TAB}
         component={HomeScreen}
         options={{
           tabBarLabel: 'Accueil',
@@ -41,7 +41,7 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="HymnsTab"
+        name={SCREENS.HYMNS_TAB}
         component={HymnsScreen}
         options={{
           tabBarLabel: 'Cantiques',
@@ -57,7 +57,7 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="TVTab"
+        name={SCREENS.TV_TAB}
         component={TVScreen}
         options={{
           tabBarLabel: 'TV',
@@ -73,7 +73,7 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="ProgramTab"
+        name={SCREENS.PROGRAM_TAB}
         component={ProgramScreen}
         options={{
           tabBarLabel: 'Programme',
@@ -89,7 +89,7 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="ProfileTab"
+        name={SCREENS.PROFILE_TAB}
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Profil',

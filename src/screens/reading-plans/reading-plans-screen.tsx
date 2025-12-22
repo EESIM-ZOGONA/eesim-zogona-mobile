@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
+  TextInput,
   TouchableOpacity,
+  ScrollView,
   Image,
   Dimensions,
 } from 'react-native';
@@ -22,32 +24,125 @@ interface ReadingPlansScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ReadingPlans'>;
 }
 
-const categoryLabels: Record<ReadingPlanCategory, string> = {
-  debutant: 'Débutant',
-  annuel: 'Annuel',
-  thematique: 'Thématique',
-  livre: 'Par Livre',
-};
+const categories: { key: ReadingPlanCategory | 'all'; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'all', label: 'Tous', icon: 'apps' },
+  { key: 'debutant', label: 'Débutant', icon: 'leaf' },
+  { key: 'thematique', label: 'Thématique', icon: 'bulb' },
+  { key: 'livre', label: 'Par Livre', icon: 'book' },
+];
 
-const categoryIcons: Record<ReadingPlanCategory, keyof typeof Ionicons.glyphMap> = {
-  debutant: 'leaf',
-  annuel: 'calendar',
-  thematique: 'bulb',
-  livre: 'book',
-};
+// Mock: plan en cours (à remplacer par état persistant)
+const activePlanId = 'debutant-7-jours';
 
 export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
-  const [activeCategory, setActiveCategory] = useState<ReadingPlanCategory | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ReadingPlanCategory | 'all'>('all');
 
-  // Mock: plan en cours (à remplacer par état persistant)
-  const activePlanId = 'debutant-7-jours';
   const activePlan = readingPlans.find(p => p.id === activePlanId);
 
-  const filteredPlans = activeCategory === 'all'
-    ? readingPlans
-    : readingPlans.filter(p => p.category === activeCategory);
+  const filteredPlans = useMemo(() => {
+    return readingPlans.filter((plan) => {
+      const matchesSearch = plan.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        plan.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || plan.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, selectedCategory]);
 
-  const categories: (ReadingPlanCategory | 'all')[] = ['all', 'debutant', 'thematique', 'livre', 'annuel'];
+  const otherPlans = filteredPlans.filter(p => p.id !== activePlanId);
+
+  const renderActivePlan = () => {
+    if (!activePlan) return null;
+    const progress = calculateProgress(activePlan);
+
+    return (
+      <TouchableOpacity
+        style={styles.featuredCard}
+        onPress={() => navigation.navigate('ReadingPlanDetail', { plan: activePlan })}
+        activeOpacity={0.95}
+      >
+        <Image
+          source={{ uri: activePlan.imageUrl || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800' }}
+          style={styles.featuredImage}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.85)']}
+          style={styles.featuredGradient}
+        />
+
+        {/* Active badge */}
+        <View style={styles.featuredBadge}>
+          <Ionicons name="checkmark-circle" size={12} color="#22c55e" />
+          <Text style={styles.featuredBadgeText}>EN COURS</Text>
+        </View>
+
+        {/* Duration badge */}
+        <View style={styles.featuredDateBadge}>
+          <Text style={styles.featuredDateMonth}>JOURS</Text>
+          <Text style={styles.featuredDateDay}>{activePlan.duration}</Text>
+        </View>
+
+        {/* Content */}
+        <View style={styles.featuredContent}>
+          <Text style={styles.featuredTitle} numberOfLines={2}>{activePlan.title}</Text>
+          <Text style={styles.featuredDesc} numberOfLines={2}>{activePlan.description}</Text>
+
+          {/* Progress bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${progress.percentage}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{progress.completed}/{progress.total}</Text>
+          </View>
+
+          <View style={styles.featuredAction}>
+            <Text style={styles.featuredActionText}>Continuer</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderPlanItem = ({ item, index }: { item: ReadingPlan; index: number }) => {
+    return (
+      <TouchableOpacity
+        style={styles.planCard}
+        onPress={() => navigation.navigate('ReadingPlanDetail', { plan: item })}
+        activeOpacity={0.9}
+      >
+        <Image
+          source={{ uri: item.imageUrl || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=800' }}
+          style={styles.planImage}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.75)']}
+          style={styles.planGradient}
+        />
+
+        {/* Category badge */}
+        <View style={styles.planBadge}>
+          <Ionicons
+            name={categories.find(c => c.key === item.category)?.icon || 'book'}
+            size={10}
+            color={colors.primary}
+          />
+          <Text style={styles.planBadgeText}>
+            {categories.find(c => c.key === item.category)?.label || item.category}
+          </Text>
+        </View>
+
+        {/* Content */}
+        <View style={styles.planContent}>
+          <Text style={styles.planTitle} numberOfLines={2}>{item.title}</Text>
+          <View style={styles.planMeta}>
+            <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.planMetaText}>{item.duration} jours</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -64,113 +159,92 @@ export function ReadingPlansScreen({ navigation }: ReadingPlansScreenProps) {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Plan actif */}
-        {activePlan && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Votre plan en cours</Text>
-            <TouchableOpacity
-              style={styles.activePlanCard}
-              onPress={() => navigation.navigate('ReadingPlanDetail', { plan: activePlan })}
-              activeOpacity={0.9}
-            >
-              <Image
-                source={{ uri: activePlan.imageUrl }}
-                style={styles.activePlanImage}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                style={styles.activePlanGradient}
-              />
-              <View style={styles.activePlanContent}>
-                <View style={styles.activePlanBadge}>
-                  <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
-                  <Text style={styles.activePlanBadgeText}>En cours</Text>
-                </View>
-                <Text style={styles.activePlanTitle}>{activePlan.title}</Text>
-                <Text style={styles.activePlanDesc} numberOfLines={2}>
-                  {activePlan.description}
-                </Text>
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${calculateProgress(activePlan).percentage}%` },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.progressText}>
-                    {calculateProgress(activePlan).completed}/{calculateProgress(activePlan).total} jours
-                  </Text>
-                </View>
-              </View>
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={20} color={colors.text.tertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher un plan..."
+            placeholderTextColor={colors.text.tertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
             </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Categories */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoriesContainer}
+        style={styles.categoriesScroll}
+      >
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat.key}
+            style={[
+              styles.categoryChip,
+              selectedCategory === cat.key && styles.categoryChipActive,
+            ]}
+            onPress={() => setSelectedCategory(cat.key)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={cat.icon}
+              size={16}
+              color={selectedCategory === cat.key ? '#fff' : colors.text.secondary}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                selectedCategory === cat.key && styles.categoryChipTextActive,
+              ]}
+            >
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <FlatList
+        data={otherPlans}
+        renderItem={renderPlanItem}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.planRow}
+        ListHeaderComponent={() => (
+          <>
+            {activePlan && (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Votre plan en cours</Text>
+              </View>
+            )}
+            {renderActivePlan()}
+            {otherPlans.length > 0 && (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Découvrir d'autres plans</Text>
+              </View>
+            )}
+          </>
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="book-outline" size={64} color={colors.text.tertiary} />
+            <Text style={styles.emptyTitle}>Aucun plan trouvé</Text>
+            <Text style={styles.emptyText}>
+              Essayez de modifier vos critères de recherche
+            </Text>
           </View>
         )}
-
-        {/* Catégories */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesContainer}
-          style={styles.categoriesScroll}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryChip,
-                activeCategory === cat && styles.categoryChipActive,
-              ]}
-              onPress={() => setActiveCategory(cat)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.categoryChipText,
-                  activeCategory === cat && styles.categoryChipTextActive,
-                ]}
-              >
-                {cat === 'all' ? 'Tous' : categoryLabels[cat]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Liste des plans */}
-        <View style={styles.plansGrid}>
-          {filteredPlans.map((plan) => (
-            <TouchableOpacity
-              key={plan.id}
-              style={styles.planCard}
-              onPress={() => navigation.navigate('ReadingPlanDetail', { plan })}
-              activeOpacity={0.9}
-            >
-              <Image source={{ uri: plan.imageUrl }} style={styles.planImage} />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.7)']}
-                style={styles.planGradient}
-              />
-              <View style={styles.planBadge}>
-                <Ionicons name={categoryIcons[plan.category]} size={12} color={colors.primary} />
-                <Text style={styles.planBadgeText}>{categoryLabels[plan.category]}</Text>
-              </View>
-              <View style={styles.planContent}>
-                <Text style={styles.planTitle} numberOfLines={2}>{plan.title}</Text>
-                <View style={styles.planMeta}>
-                  <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.planMetaText}>{plan.duration} jours</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -182,6 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -205,103 +280,39 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 44,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xxl,
-  },
-  section: {
+  // Search
+  searchContainer: {
     paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
     marginBottom: spacing.md,
   },
-  // Active Plan
-  activePlanCard: {
-    height: 200,
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  activePlanImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-  },
-  activePlanGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  activePlanContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: spacing.lg,
-  },
-  activePlanBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    alignSelf: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  activePlanBadgeText: {
-    fontSize: fontSize.xs,
-    fontFamily: fontFamily.semibold,
-    color: '#22c55e',
-  },
-  activePlanTitle: {
-    fontSize: fontSize.xl,
-    fontFamily: fontFamily.bold,
-    color: '#fff',
-    marginBottom: spacing.xs,
-  },
-  activePlanDesc: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.regular,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: spacing.md,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  progressBar: {
+  searchInput: {
     flex: 1,
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: fontSize.xs,
-    fontFamily: fontFamily.medium,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
+    color: colors.text.primary,
+    paddingVertical: spacing.xs,
   },
   // Categories
   categoriesScroll: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   categoriesContainer: {
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
   categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
@@ -319,19 +330,142 @@ const styles = StyleSheet.create({
   categoryChipTextActive: {
     color: '#fff',
   },
-  // Plans Grid
-  plansGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // List
+  listContent: {
     paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  sectionHeader: {
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+  },
+  // Featured Card (Active Plan)
+  featuredCard: {
+    height: 280,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  featuredImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  featuredGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  featuredBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  featuredBadgeText: {
+    fontSize: 10,
+    fontFamily: fontFamily.bold,
+    color: '#22c55e',
+    letterSpacing: 0.5,
+  },
+  featuredDateBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    backgroundColor: '#fff',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    minWidth: 56,
+  },
+  featuredDateMonth: {
+    fontSize: 9,
+    fontFamily: fontFamily.bold,
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  featuredDateDay: {
+    fontSize: fontSize.xl,
+    fontFamily: fontFamily.extrabold,
+    color: colors.primary,
+    marginTop: -2,
+  },
+  featuredContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.lg,
+  },
+  featuredTitle: {
+    fontSize: fontSize.xl,
+    fontFamily: fontFamily.bold,
+    color: '#fff',
+    marginBottom: spacing.xs,
+  },
+  featuredDesc: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: spacing.md,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  progressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.bold,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  featuredAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  featuredActionText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: '#fff',
+  },
+  // Plan Card Grid
+  planRow: {
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
   planCard: {
     width: CARD_WIDTH,
-    height: 180,
+    height: 200,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
-    position: 'relative',
   },
   planImage: {
     width: '100%',
@@ -380,5 +514,23 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontFamily: fontFamily.medium,
     color: 'rgba(255,255,255,0.8)',
+  },
+  // Empty
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxxl,
+  },
+  emptyTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+    marginTop: spacing.lg,
+  },
+  emptyText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 });

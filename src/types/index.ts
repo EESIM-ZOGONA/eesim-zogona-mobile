@@ -100,17 +100,19 @@ export interface QuickAction {
   color?: string;
 }
 
+import { SCREENS } from '../constants/screens';
+
 export type RootStackParamList = {
-  Onboarding: undefined;
-  Auth: undefined;
-  Login: undefined;
-  Otp: { phone: string };
-  Main: undefined;
-  Home: undefined;
-  Hymns: undefined;
-  HymnDetail: { hymn: Hymn };
-  TV: undefined;
-  VideoPlayer: {
+  [SCREENS.ONBOARDING]: undefined;
+  [SCREENS.AUTH]: undefined;
+  [SCREENS.LOGIN]: undefined;
+  [SCREENS.OTP]: { phone: string };
+  [SCREENS.MAIN]: undefined;
+  [SCREENS.HOME]: undefined;
+  [SCREENS.HYMNS]: undefined;
+  [SCREENS.HYMN_DETAIL]: { hymn: Hymn };
+  [SCREENS.TV]: undefined;
+  [SCREENS.VIDEO_PLAYER]: {
     video: {
       id: string;
       title: string;
@@ -126,46 +128,44 @@ export type RootStackParamList = {
     };
     playlistId?: string;
   };
-  Program: undefined;
-  ProgramDetail: { activity: ProgramActivity };
-  Events: undefined;
-  EventDetail: { event: Event };
-  Profile: undefined;
-  Settings: undefined;
-  EditProfile: undefined;
-  Notifications: undefined;
-  About: undefined;
-  HelpSupport: undefined;
-  MyEvents: undefined;
-  MyDonations: undefined;
-  MyCell: undefined;
-  MyFavorites: undefined;
-  SocialMedia: undefined;
-  Meditations: undefined;
-  MeditationList: { category?: MeditationCategory };
-  MeditationDetail: { meditation: Meditation };
-  Quiz: undefined;
-  QuizCategory: { category: QuizCategory };
-  QuizPlay: { quiz: Quiz };
-  QuizResult: {
+  [SCREENS.PROGRAM]: undefined;
+  [SCREENS.PROGRAM_DETAIL]: { activity: ProgramActivity };
+  [SCREENS.EVENTS]: undefined;
+  [SCREENS.EVENT_DETAIL]: { event: Event };
+  [SCREENS.PROFILE]: undefined;
+  [SCREENS.SETTINGS]: undefined;
+  [SCREENS.EDIT_PROFILE]: undefined;
+  [SCREENS.NOTIFICATIONS]: undefined;
+  [SCREENS.ABOUT]: undefined;
+  [SCREENS.HELP_SUPPORT]: undefined;
+  [SCREENS.MY_EVENTS]: undefined;
+  [SCREENS.MY_DONATIONS]: undefined;
+  [SCREENS.MY_CELL]: undefined;
+  [SCREENS.MY_FAVORITES]: undefined;
+  [SCREENS.SOCIAL_MEDIA]: undefined;
+  [SCREENS.MEDITATIONS]: undefined;
+  [SCREENS.MEDITATION_LIST]: { category?: MeditationCategory };
+  [SCREENS.MEDITATION_DETAIL]: { meditation: Meditation };
+  [SCREENS.QUIZ]: undefined;
+  [SCREENS.QUIZ_CATEGORY]: { category: QuizCategory };
+  [SCREENS.QUIZ_PLAY]: { quiz: Quiz };
+  [SCREENS.QUIZ_RESULT]: {
     quiz: Quiz;
     score: number;
     totalQuestions: number;
     userAnswers?: number[];
     questions?: QuizQuestion[];
   };
-  // Bible routes
-  Bible: undefined;
-  BibleBook: { book: BibleBook };
-  BibleChapter: { bookId: string; bookName: string; chapter: number };
-  // Notes routes
-  Notes: undefined;
-  NoteDetail: { note: Note };
-  NoteEdit: { note?: Note; linkedVerseRef?: string };
-  // Reading Plan routes
-  ReadingPlans: undefined;
-  ReadingPlanDetail: { plan: ReadingPlan };
-  ReadingPlanDay: { plan: ReadingPlan; day: ReadingPlanDay };
+  [SCREENS.BIBLE]: undefined;
+  [SCREENS.BIBLE_BOOK]: { book: BibleBook };
+  [SCREENS.BIBLE_CHAPTER]: { bookId: string; bookName: string; chapter: number; scrollToVerse?: number };
+  [SCREENS.VERSE_COMPARE]: { bookId: string; bookName: string; chapter: number; verses: number[] };
+  [SCREENS.NOTES]: undefined;
+  [SCREENS.NOTE_DETAIL]: { note: Note };
+  [SCREENS.NOTE_EDIT]: { note?: Note; linkedVerseRef?: string; prefillTitle?: string; prefillContent?: string };
+  [SCREENS.READING_PLANS]: undefined;
+  [SCREENS.READING_PLAN_DETAIL]: { plan: ReadingPlan };
+  [SCREENS.READING_PLAN_DAY]: { plan: ReadingPlan; day: ReadingPlanDay };
 };
 
 // Meditation types
@@ -210,11 +210,11 @@ export interface QuizQuestion {
 export type QuizCategory = 'ancien_testament' | 'nouveau_testament' | 'personnages' | 'versets' | 'general';
 
 export type MainTabParamList = {
-  HomeTab: undefined;
-  HymnsTab: undefined;
-  TVTab: undefined;
-  ProgramTab: undefined;
-  ProfileTab: undefined;
+  [SCREENS.HOME_TAB]: undefined;
+  [SCREENS.HYMNS_TAB]: undefined;
+  [SCREENS.TV_TAB]: undefined;
+  [SCREENS.PROGRAM_TAB]: undefined;
+  [SCREENS.PROFILE_TAB]: undefined;
 };
 
 // Bible types
@@ -237,6 +237,53 @@ export interface BibleChapter {
   book: string;
   chapter: number;
   verses: BibleVerse[];
+}
+
+// Verse Highlight types
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange';
+
+export const HIGHLIGHT_COLORS: Record<HighlightColor, string> = {
+  yellow: '#FEF3C7',
+  green: '#D1FAE5',
+  blue: '#DBEAFE',
+  pink: '#FCE7F3',
+  orange: '#FFEDD5',
+};
+
+export interface VerseHighlight {
+  id: string;
+  bookId: string;
+  chapter: number;
+  verse: number;
+  color: HighlightColor;
+  createdAt: string;
+}
+
+// Verse Bookmark types
+export interface VerseBookmark {
+  id: string;
+  bookId: string;
+  bookName: string;
+  chapter: number;
+  verse: number;
+  text: string;
+  note?: string;
+  createdAt: string;
+}
+
+// Parsed Verse Reference
+export interface ParsedVerseRef {
+  bookId: string;
+  bookName: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+}
+
+// User Highlight Preferences
+export interface UserHighlightPreferences {
+  recentColors: HighlightColor[];
+  defaultColor: HighlightColor;
 }
 
 // Notes types

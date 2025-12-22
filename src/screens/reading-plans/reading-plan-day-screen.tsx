@@ -5,13 +5,17 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+
+const { width } = Dimensions.get('window');
 
 interface ReadingPlanDayScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ReadingPlanDay'>;
@@ -53,43 +57,63 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerSubtitle}>{plan.title}</Text>
-          <Text style={styles.headerTitle}>Jour {day.day}</Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Day Title */}
-        <View style={styles.dayTitleSection}>
-          <View style={styles.dayBadge}>
-            <Text style={styles.dayBadgeText}>JOUR {day.day}</Text>
-          </View>
-          <Text style={styles.dayTitle}>{day.title}</Text>
-        </View>
+        {/* Hero Header */}
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
 
-        {/* Readings */}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroPlanTitle} numberOfLines={1}>{plan.title}</Text>
+            <View style={styles.heroDayBadge}>
+              <Ionicons name="calendar" size={14} color={colors.primary} />
+              <Text style={styles.heroDayBadgeText}>JOUR {day.day}</Text>
+            </View>
+            <Text style={styles.heroDayTitle}>{day.title}</Text>
+
+            <View style={styles.heroStats}>
+              <View style={styles.heroStat}>
+                <Ionicons name="book-outline" size={16} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.heroStatText}>{day.readings.length} lecture{day.readings.length > 1 ? 's' : ''}</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Ionicons name="checkmark-circle-outline" size={16} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.heroStatText}>{completedReadings.length}/{day.readings.length}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.cardAccent} />
+        </LinearGradient>
+
+        {/* Readings Section */}
         <View style={styles.readingsSection}>
-          <Text style={styles.sectionTitle}>Lectures du jour</Text>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleWrap}>
+              <View style={styles.sectionDot} />
+              <Text style={styles.sectionTitle}>Lectures du jour</Text>
+            </View>
+            <Text style={styles.readingsCount}>{day.readings.length} passage{day.readings.length > 1 ? 's' : ''}</Text>
+          </View>
+
           {day.readings.map((reading, index) => {
             const key = `${day.id}-${index}`;
             const isComplete = completedReadings.includes(key);
             return (
-              <View key={index} style={styles.readingCard}>
+              <View key={index} style={[styles.readingCard, isComplete && styles.readingCardComplete]}>
                 <TouchableOpacity
                   style={[styles.readingCheckbox, isComplete && styles.readingCheckboxComplete]}
                   onPress={() => toggleReading(index)}
@@ -101,14 +125,15 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
                   <Text style={[styles.readingRef, isComplete && styles.readingRefComplete]}>
                     {formatReading(reading)}
                   </Text>
+                  <Text style={styles.readingHint}>Appuyez sur Lire pour ouvrir</Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.readingOpenButton}
+                  style={[styles.readingOpenButton, isComplete && styles.readingOpenButtonComplete]}
                   onPress={() => handleOpenReading(reading)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="book-outline" size={18} color={colors.primary} />
-                  <Text style={styles.readingOpenText}>Lire</Text>
+                  <Ionicons name="book-outline" size={18} color={isComplete ? colors.text.secondary : colors.primary} />
+                  <Text style={[styles.readingOpenText, isComplete && styles.readingOpenTextComplete]}>Lire</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -118,9 +143,16 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
         {/* Reflection */}
         {day.reflection && (
           <View style={styles.reflectionSection}>
-            <Text style={styles.sectionTitle}>Réflexion</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleWrap}>
+                <View style={styles.sectionDot} />
+                <Text style={styles.sectionTitle}>Réflexion</Text>
+              </View>
+            </View>
             <View style={styles.reflectionCard}>
-              <Ionicons name="bulb-outline" size={20} color={colors.primary} style={styles.reflectionIcon} />
+              <View style={styles.reflectionIconWrap}>
+                <Ionicons name="bulb" size={20} color={colors.primary} />
+              </View>
               <Text style={styles.reflectionText}>{day.reflection}</Text>
             </View>
           </View>
@@ -128,17 +160,45 @@ export function ReadingPlanDayScreen({ navigation, route }: ReadingPlanDayScreen
 
         {/* Quick Actions */}
         <View style={styles.actionsSection}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('NoteEdit', {
-              note: undefined,
-              linkedVerseRef: day.readings[0] ? formatReading(day.readings[0]) : undefined,
-            })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-            <Text style={styles.actionButtonText}>Prendre des notes</Text>
-          </TouchableOpacity>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleWrap}>
+              <View style={styles.sectionDot} />
+              <Text style={styles.sectionTitle}>Actions</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate('NoteEdit', {
+                note: undefined,
+                linkedVerseRef: day.readings[0] ? formatReading(day.readings[0]) : undefined,
+              })}
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionIconWrap}>
+                <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.actionCardTitle}>Notes</Text>
+              <Text style={styles.actionCardSubtitle}>Prendre des notes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => {
+                if (day.readings[0]) {
+                  handleOpenReading(day.readings[0]);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionIconWrap}>
+                <Ionicons name="book-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.actionCardTitle}>Bible</Text>
+              <Text style={styles.actionCardSubtitle}>Commencer la lecture</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
@@ -177,85 +237,128 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 120,
+  },
+  // Hero Card
+  heroCard: {
+    margin: spacing.lg,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xl,
+    position: 'relative',
+    overflow: 'hidden',
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
-  headerCenter: {
-    alignItems: 'center',
+  heroContent: {
+    // Content styling
   },
-  headerSubtitle: {
-    fontSize: fontSize.xs,
+  heroPlanTitle: {
+    fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: spacing.sm,
   },
-  headerTitle: {
-    fontSize: fontSize.lg,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-  },
-  headerRight: {
-    width: 44,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 100,
-  },
-  // Day Title
-  dayTitleSection: {
-    marginBottom: spacing.xl,
-  },
-  dayBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  heroDayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#fff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderRadius: borderRadius.full,
     alignSelf: 'flex-start',
     marginBottom: spacing.sm,
   },
-  dayBadgeText: {
-    fontSize: fontSize.xs,
+  heroDayBadgeText: {
+    fontSize: 10,
     fontFamily: fontFamily.bold,
     color: colors.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
-  dayTitle: {
+  heroDayTitle: {
     fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
+    color: '#fff',
+    marginBottom: spacing.lg,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  heroStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  heroStatText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  cardAccent: {
+    position: 'absolute',
+    bottom: -20,
+    right: -20,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  // Section Header
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  sectionTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.bold,
     color: colors.text.primary,
+  },
+  readingsCount: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
   },
   // Readings
   readingsSection: {
-    marginBottom: spacing.xl,
-  },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontFamily: fontFamily.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   readingCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     marginBottom: spacing.sm,
     gap: spacing.md,
+  },
+  readingCardComplete: {
+    backgroundColor: colors.primaryLight,
   },
   readingCheckbox: {
     width: 32,
@@ -277,10 +380,16 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
+    marginBottom: 2,
   },
   readingRefComplete: {
     color: colors.text.secondary,
     textDecorationLine: 'line-through',
+  },
+  readingHint: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
+    color: colors.text.tertiary,
   },
   readingOpenButton: {
     flexDirection: 'row',
@@ -289,31 +398,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
+  },
+  readingOpenButtonComplete: {
+    backgroundColor: colors.surface,
   },
   readingOpenText: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.semibold,
     color: colors.primary,
   },
+  readingOpenTextComplete: {
+    color: colors.text.secondary,
+  },
   // Reflection
   reflectionSection: {
-    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   reflectionCard: {
-    flexDirection: 'row',
     padding: spacing.lg,
-    backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
   },
-  reflectionIcon: {
-    marginRight: spacing.md,
-    marginTop: 2,
+  reflectionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   reflectionText: {
-    flex: 1,
     fontSize: fontSize.md,
     fontFamily: fontFamily.regular,
     color: colors.text.primary,
@@ -321,23 +438,40 @@ const styles = StyleSheet.create({
   },
   // Actions
   actionsSection: {
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.xl,
   },
-  actionButton: {
+  actionsGrid: {
     flexDirection: 'row',
+    gap: spacing.md,
+  },
+  actionCard: {
+    flex: 1,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+  },
+  actionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    marginBottom: spacing.sm,
   },
-  actionButtonText: {
+  actionCardTitle: {
     fontSize: fontSize.md,
-    fontFamily: fontFamily.semibold,
-    color: colors.primary,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  actionCardSubtitle: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
+    color: colors.text.secondary,
+    textAlign: 'center',
   },
   // Bottom Bar
   bottomBar: {
@@ -345,11 +479,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: colors.background,
+    borderTopColor: colors.surface,
   },
   completeButton: {
     flexDirection: 'row',
@@ -358,12 +492,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
   },
   completeButtonDisabled: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.text.tertiary,
   },
   completeButtonText: {
     fontSize: fontSize.md,

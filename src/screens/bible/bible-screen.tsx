@@ -1,12 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   FlatList,
+  Dimensions,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,8 +16,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDebouncedCallback } from 'use-debounce';
 import { RootStackParamList, BibleBook } from '../../types';
-import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { bibleBooks, getDailyVerse, getBooksByTestament } from '../../data/bible-data';
+import { colors, spacing, fontSize, fontFamily, borderRadius, SCREENS } from '../../constants';
+import {
+  initBibleDatabase,
+  getAllBooks,
+  getBooksByTestament as getBooksByTestamentDB,
+  getDailyVerse as getDailyVerseDB,
+  BIBLE_BOOKS,
+  BibleSearchResult,
+  BIBLE_VERSIONS,
+  BibleVersionCode,
+  getCurrentVersion,
+  setCurrentVersion,
+  getCurrentVersionInfo,
+} from '../../services/bible-database';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - spacing.lg * 2 - spacing.md) / 2;
 
 interface BibleScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Bible'>;
@@ -25,8 +42,44 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
   const [activeTestament, setActiveTestament] = useState<'old' | 'new'>('old');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dailyVerse, setDailyVerse] = useState<BibleSearchResult | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [allBooks, setAllBooks] = useState<BibleBook[]>([]);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<BibleVersionCode>('LSG');
 
-  const dailyVerse = getDailyVerse();
+  useEffect(() => {
+    async function init() {
+      try {
+        await initBibleDatabase();
+        const currentVer = getCurrentVersion();
+        setSelectedVersion(currentVer);
+        const [books, verse] = await Promise.all([
+          getAllBooks(),
+          getDailyVerseDB(),
+        ]);
+        setAllBooks(books);
+        setDailyVerse(verse);
+      } catch (error) {
+        console.error('Error initializing Bible:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    init();
+  }, []);
+
+  const handleVersionChange = async (version: BibleVersionCode) => {
+    setSelectedVersion(version);
+    await setCurrentVersion(version);
+    setShowVersionModal(false);
+    const verse = await getDailyVerseDB();
+    setDailyVerse(verse);
+  };
+
+  const currentVersionInfo = useMemo(() => {
+    return BIBLE_VERSIONS.find(v => v.code === selectedVersion) || BIBLE_VERSIONS[0];
+  }, [selectedVersion]);
 
   const debouncedSearch = useDebouncedCallback((value: string) => {
     setSearchQuery(value);
@@ -43,25 +96,73 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
   }, []);
 
   // Filtrer les livres
-  const filteredBooks = searchQuery
-    ? bibleBooks.filter(book =>
+  const filteredBooks = useMemo(() => {
+    if (searchQuery) {
+      return allBooks.filter(book =>
         book.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         book.abbrev.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : getBooksByTestament(activeTestament);
+      );
+    }
+    return allBooks.filter(book => book.testament === activeTestament);
+  }, [searchQuery, activeTestament, allBooks]);
 
-  const renderBookItem = ({ item: book }: { item: BibleBook }) => (
+  // Quick access books
+  const quickAccessBooks = useMemo(() => {
+    return [
+      allBooks.find(b => b.abbrev === 'Gen'),
+      allBooks.find(b => b.abbrev === 'Ps'),
+      allBooks.find(b => b.abbrev === 'Prov'),
+      allBooks.find(b => b.abbrev === 'Matt'),
+      allBooks.find(b => b.abbrev === 'Jean'),
+      allBooks.find(b => b.abbrev === 'Rom'),
+    ].filter(Boolean) as BibleBook[];
+  }, [allBooks]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement de la Bible...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const renderBookCard = ({ item: book, index }: { item: BibleBook; index: number }) => (
     <TouchableOpacity
       style={styles.bookCard}
-      onPress={() => navigation.navigate('BibleBook', { book })}
+      onPress={() => navigation.navigate(SCREENS.BIBLE_BOOK, { book })}
+      activeOpacity={0.9}
+    >
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.bookCardGradient}
+      >
+        <View style={styles.bookCardContent}>
+          <Text style={styles.bookAbbrev}>{book.abbrev}</Text>
+          <Text style={styles.bookName} numberOfLines={2}>{book.name}</Text>
+          <Text style={styles.bookChapters}>{book.chapters} chap.</Text>
+        </View>
+        <View style={styles.bookCardAccent} />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  const renderBookListItem = ({ item: book }: { item: BibleBook }) => (
+    <TouchableOpacity
+      style={styles.bookListItem}
+      onPress={() => navigation.navigate(SCREENS.BIBLE_BOOK, { book })}
       activeOpacity={0.8}
     >
-      <View style={styles.bookAbbrev}>
-        <Text style={styles.bookAbbrevText}>{book.abbrev}</Text>
+      <View style={styles.bookListAbbrev}>
+        <Text style={styles.bookListAbbrevText}>{book.abbrev}</Text>
       </View>
-      <View style={styles.bookInfo}>
-        <Text style={styles.bookName}>{book.name}</Text>
-        <Text style={styles.bookChapters}>{book.chapters} chapitres</Text>
+      <View style={styles.bookListInfo}>
+        <Text style={styles.bookListName}>{book.name}</Text>
+        <Text style={styles.bookListChapters}>{book.chapters} chapitres</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
     </TouchableOpacity>
@@ -78,46 +179,72 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
+        <TouchableOpacity
+          style={styles.headerCenter}
+          onPress={() => setShowVersionModal(true)}
+          activeOpacity={0.7}
+        >
           <Text style={styles.headerTitle}>La Bible</Text>
-          <Text style={styles.headerSubtitle}>Louis Segond 1910</Text>
-        </View>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Ionicons name="settings-outline" size={22} color={colors.text.primary} />
+          <View style={styles.versionSelector}>
+            <Text style={styles.headerSubtitle}>{currentVersionInfo.name}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.text.secondary} />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="bookmark-outline" size={22} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={filteredBooks}
-        renderItem={renderBookItem}
+        renderItem={renderBookListItem}
         keyExtractor={(item) => item.id}
-        numColumns={1}
         ListHeaderComponent={() => (
           <>
-            {/* Daily Verse Card */}
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.dailyVerseCard}
-            >
-              <View style={styles.dailyVerseHeader}>
-                <View style={styles.dailyVerseBadge}>
-                  <Ionicons name="sunny" size={14} color="#fbbf24" />
-                  <Text style={styles.dailyVerseBadgeText}>VERSET DU JOUR</Text>
-                </View>
-              </View>
-              <Text style={styles.dailyVerseText}>"{dailyVerse.text}"</Text>
-              <Text style={styles.dailyVerseRef}>
-                {dailyVerse.book} {dailyVerse.chapter}:{dailyVerse.verse}
-              </Text>
-              <View style={styles.cardAccent} />
-            </LinearGradient>
+            {/* Daily Verse Hero */}
+            {dailyVerse && (
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => {
+                  navigation.navigate(SCREENS.BIBLE_CHAPTER, {
+                    bookId: dailyVerse.bookId,
+                    bookName: dailyVerse.bookName,
+                    chapter: dailyVerse.chapter,
+                  });
+                }}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.dailyVerseCard}
+                >
+                  <View style={styles.dailyVerseBadge}>
+                    <Ionicons name="sunny" size={14} color="#fbbf24" />
+                    <Text style={styles.dailyVerseBadgeText}>VERSET DU JOUR</Text>
+                  </View>
+                  <Text style={styles.dailyVerseText}>"{dailyVerse.text}"</Text>
+                  <View style={styles.dailyVerseFooter}>
+                    <Text style={styles.dailyVerseRef}>
+                      {dailyVerse.bookName} {dailyVerse.chapter}:{dailyVerse.verse}
+                    </Text>
+                    <View style={styles.dailyVerseAction}>
+                      <Text style={styles.dailyVerseActionText}>Lire</Text>
+                      <Ionicons name="arrow-forward" size={14} color="#fff" />
+                    </View>
+                  </View>
+                  <View style={styles.cardAccent} />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
               <View style={styles.searchInputWrap}>
-                <Ionicons name="search" size={20} color={colors.text.secondary} />
+                <Ionicons name="search" size={20} color={colors.text.tertiary} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Rechercher un livre..."
@@ -129,11 +256,33 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
                 />
                 {searchInput.length > 0 && (
                   <TouchableOpacity onPress={clearSearch}>
-                    <Ionicons name="close-circle" size={20} color={colors.text.secondary} />
+                    <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
+
+            {/* Quick Access */}
+            {!searchQuery && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleWrap}>
+                    <View style={styles.sectionDot} />
+                    <Text style={styles.sectionTitle}>Accès rapide</Text>
+                  </View>
+                </View>
+
+                <FlatList
+                  horizontal
+                  data={quickAccessBooks}
+                  renderItem={renderBookCard}
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.quickAccessList}
+                  style={styles.quickAccessScroll}
+                />
+              </>
+            )}
 
             {/* Testament Tabs */}
             {!searchQuery && (
@@ -146,6 +295,9 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
                   <Text style={[styles.tabText, activeTestament === 'old' && styles.tabTextActive]}>
                     Ancien Testament
                   </Text>
+                  <Text style={[styles.tabCount, activeTestament === 'old' && styles.tabCountActive]}>
+                    39
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.tab, activeTestament === 'new' && styles.tabActive]}
@@ -154,6 +306,9 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
                 >
                   <Text style={[styles.tabText, activeTestament === 'new' && styles.tabTextActive]}>
                     Nouveau Testament
+                  </Text>
+                  <Text style={[styles.tabCount, activeTestament === 'new' && styles.tabCountActive]}>
+                    27
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -174,6 +329,52 @@ export function BibleScreen({ navigation }: BibleScreenProps) {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+
+      <Modal
+        visible={showVersionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVersionModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowVersionModal(false)}
+        >
+          <View style={styles.versionModalContent}>
+            <View style={styles.versionModalHeader}>
+              <Text style={styles.versionModalTitle}>Version de la Bible</Text>
+              <TouchableOpacity onPress={() => setShowVersionModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            {BIBLE_VERSIONS.map((version) => (
+              <TouchableOpacity
+                key={version.code}
+                style={[
+                  styles.versionOption,
+                  selectedVersion === version.code && styles.versionOptionActive,
+                ]}
+                onPress={() => handleVersionChange(version.code)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.versionOptionInfo}>
+                  <Text style={[
+                    styles.versionOptionName,
+                    selectedVersion === version.code && styles.versionOptionNameActive,
+                  ]}>
+                    {version.name}
+                  </Text>
+                  <Text style={styles.versionOptionCode}>{version.shortName}</Text>
+                </View>
+                {selectedVersion === version.code && (
+                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -224,16 +425,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-  // Daily Verse
+  // Daily Verse Hero
   dailyVerseCard: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.xxl,
     padding: spacing.xl,
     marginBottom: spacing.lg,
     position: 'relative',
     overflow: 'hidden',
-  },
-  dailyVerseHeader: {
-    marginBottom: spacing.md,
   },
   dailyVerseBadge: {
     flexDirection: 'row',
@@ -244,6 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
     alignSelf: 'flex-start',
+    marginBottom: spacing.md,
   },
   dailyVerseBadgeText: {
     fontSize: 10,
@@ -257,32 +456,50 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontStyle: 'italic',
     lineHeight: 28,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  dailyVerseFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dailyVerseRef: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.bold,
     color: 'rgba(255,255,255,0.9)',
   },
+  dailyVerseAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  dailyVerseActionText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: '#fff',
+  },
   cardAccent: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    bottom: -30,
+    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    transform: [{ translateX: 30 }, { translateY: 30 }],
   },
   // Search
   searchContainer: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
@@ -294,19 +511,71 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.xs,
   },
+  // Quick Access
+  quickAccessScroll: {
+    marginBottom: spacing.lg,
+    marginHorizontal: -spacing.lg,
+  },
+  quickAccessList: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  bookCard: {
+    width: 120,
+    height: 140,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+  bookCardGradient: {
+    flex: 1,
+    padding: spacing.md,
+    position: 'relative',
+  },
+  bookCardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  bookAbbrev: {
+    fontSize: fontSize.xxl,
+    fontFamily: fontFamily.bold,
+    color: '#fff',
+  },
+  bookName: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: '#fff',
+    marginTop: spacing.xs,
+  },
+  bookChapters: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.medium,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  bookCardAccent: {
+    position: 'absolute',
+    bottom: -20,
+    right: -20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
   // Tabs
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.xs,
     marginBottom: spacing.lg,
   },
   tab: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
   },
   tabActive: {
     backgroundColor: colors.primary,
@@ -319,6 +588,19 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#fff',
     fontFamily: fontFamily.semibold,
+  },
+  tabCount: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.bold,
+    color: colors.text.tertiary,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  tabCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    color: '#fff',
   },
   // Section Header
   sectionHeader: {
@@ -348,16 +630,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
   },
-  // Book Card
-  bookCard: {
+  // Book List Item
+  bookListItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  bookAbbrev: {
+  bookListAbbrev: {
     width: 48,
     height: 48,
     borderRadius: 12,
@@ -366,21 +648,92 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  bookAbbrevText: {
+  bookListAbbrevText: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.bold,
     color: colors.primary,
   },
-  bookInfo: {
+  bookListInfo: {
     flex: 1,
   },
-  bookName: {
+  bookListName: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
     marginBottom: 2,
   },
-  bookChapters: {
+  bookListChapters: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.text.secondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+  },
+  versionSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  versionModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  versionModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  versionModalTitle: {
+    fontSize: fontSize.xl,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+  },
+  versionOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.xs,
+  },
+  versionOptionActive: {
+    backgroundColor: colors.primaryLight,
+  },
+  versionOptionInfo: {
+    flex: 1,
+  },
+  versionOptionName: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  versionOptionNameActive: {
+    color: colors.primary,
+  },
+  versionOptionCode: {
     fontSize: fontSize.sm,
     fontFamily: fontFamily.regular,
     color: colors.text.secondary,
