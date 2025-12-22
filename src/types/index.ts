@@ -154,6 +154,14 @@ export type RootStackParamList = {
     userAnswers?: number[];
     questions?: QuizQuestion[];
   };
+  // Bible routes
+  Bible: undefined;
+  BibleBook: { book: BibleBook };
+  BibleChapter: { book: BibleBook; chapter: number };
+  // Notes routes
+  Notes: undefined;
+  NoteDetail: { note: Note };
+  NoteEdit: { note?: Note };
 };
 
 // Meditation types
@@ -204,3 +212,39 @@ export type MainTabParamList = {
   ProgramTab: undefined;
   ProfileTab: undefined;
 };
+
+// Bible types
+export interface BibleBook {
+  id: string;
+  name: string;
+  abbrev: string;
+  chapters: number;
+  testament: 'old' | 'new';
+}
+
+export interface BibleVerse {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface BibleChapter {
+  book: string;
+  chapter: number;
+  verses: BibleVerse[];
+}
+
+// Notes types
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  category: NoteCategory;
+  createdAt: string;
+  updatedAt: string;
+  linkedVerseRef?: string; // e.g., "Jean 3:16"
+  isFavorite?: boolean;
+}
+
+export type NoteCategory = 'meditation' | 'predication' | 'etude' | 'priere' | 'personnel';
