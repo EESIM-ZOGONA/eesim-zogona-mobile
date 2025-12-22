@@ -14,106 +14,33 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
+import { useSocialMedia } from '../../hooks';
 
 interface SocialMediaScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'SocialMedia'>;
 }
-
-interface SocialLink {
-  id: string;
-  name: string;
-  handle: string;
-  url: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  gradient: [string, string];
-  followers?: string;
-}
-
-const socialLinks: SocialLink[] = [
-  {
-    id: 'website',
-    name: 'Site Web',
-    handle: 'eesimzogona.org',
-    url: 'https://eesimzogona.org',
-    icon: 'globe-outline',
-    gradient: ['#030a7f', '#020866'],
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    handle: '@EgliseEvangeliqueSIMZogona',
-    url: 'https://youtube.com/@EgliseEvangeliqueSIMZogona',
-    icon: 'logo-youtube',
-    gradient: ['#ff0000', '#cc0000'],
-    followers: '2.5K',
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook',
-    handle: 'EE SIM Zogona',
-    url: 'https://facebook.com/eesimzogona',
-    icon: 'logo-facebook',
-    gradient: ['#1877f2', '#0d65d9'],
-    followers: '5.2K',
-  },
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    handle: '@eesimzogona',
-    url: 'https://instagram.com/eesimzogona',
-    icon: 'logo-instagram',
-    gradient: ['#e4405f', '#c13584'],
-    followers: '1.8K',
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok',
-    handle: '@eesimzogona',
-    url: 'https://tiktok.com/@eesimzogona',
-    icon: 'logo-tiktok',
-    gradient: ['#000000', '#333333'],
-    followers: '850',
-  },
-  {
-    id: 'whatsapp',
-    name: 'WhatsApp',
-    handle: 'Groupe de prière',
-    url: 'https://chat.whatsapp.com/invite-link',
-    icon: 'logo-whatsapp',
-    gradient: ['#25d366', '#128c7e'],
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    handle: 'Canal EE SIM Zogona',
-    url: 'https://t.me/eesimzogona',
-    icon: 'paper-plane',
-    gradient: ['#0088cc', '#006699'],
-  },
-];
 
 const quickActions = [
   {
     id: 'share',
     icon: 'share-social' as const,
     label: 'Partager l\'app',
-    color: '#059669',
   },
   {
     id: 'invite',
     icon: 'person-add' as const,
     label: 'Inviter un ami',
-    color: '#7c3aed',
   },
   {
     id: 'contact',
     icon: 'mail' as const,
     label: 'Nous contacter',
-    color: '#d97706',
   },
 ];
 
 export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
+  const { socialLinks, stats } = useSocialMedia();
+
   const openLink = (url: string) => {
     Linking.openURL(url).catch((err) => {
       console.error('Error opening link:', err);
@@ -131,13 +58,24 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
     }
   };
 
+  const inviteFriend = async () => {
+    try {
+      await Share.share({
+        message: 'Salut ! Je t\'invite à rejoindre notre communauté EE/SIM Zogona. Télécharge l\'application pour découvrir nos méditations, cantiques et prédications. 🙏✨\n\nhttps://eesimzogona.org/app',
+        title: 'Invitation EE/SIM Zogona',
+      });
+    } catch (error) {
+      console.error('Error inviting:', error);
+    }
+  };
+
   const handleQuickAction = (actionId: string) => {
     switch (actionId) {
       case 'share':
         shareApp();
         break;
       case 'invite':
-        shareApp();
+        inviteFriend();
         break;
       case 'contact':
         openLink('mailto:contact@eesimzogona.org');
@@ -190,17 +128,17 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
           </Text>
           <View style={styles.heroStats}>
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>10K+</Text>
+              <Text style={styles.heroStatValue}>{stats.totalFollowers}</Text>
               <Text style={styles.heroStatLabel}>Communauté</Text>
             </View>
             <View style={styles.heroStatDivider} />
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>7</Text>
+              <Text style={styles.heroStatValue}>{stats.platformCount}</Text>
               <Text style={styles.heroStatLabel}>Plateformes</Text>
             </View>
             <View style={styles.heroStatDivider} />
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>500+</Text>
+              <Text style={styles.heroStatValue}>{stats.videoCount}</Text>
               <Text style={styles.heroStatLabel}>Vidéos</Text>
             </View>
           </View>
@@ -216,8 +154,8 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
               onPress={() => handleQuickAction(action.id)}
               activeOpacity={0.8}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}15` }]}>
-                <Ionicons name={action.icon} size={22} color={action.color} />
+              <View style={styles.quickActionIcon}>
+                <Ionicons name={action.icon} size={22} color={colors.primary} />
               </View>
               <Text style={styles.quickActionLabel}>{action.label}</Text>
             </TouchableOpacity>
@@ -232,7 +170,7 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
           </View>
         </View>
 
-        {socialLinks.map((social, index) => (
+        {socialLinks.map((social) => (
           <TouchableOpacity
             key={social.id}
             style={styles.socialCard}
@@ -269,9 +207,9 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.promoCard} onPress={shareApp} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.promoCard} onPress={inviteFriend} activeOpacity={0.9}>
           <LinearGradient
-            colors={['#059669', '#047857']}
+            colors={[colors.primary, colors.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.promoGradient}
@@ -288,8 +226,8 @@ export function SocialMediaScreen({ navigation }: SocialMediaScreenProps) {
               </View>
             </View>
             <View style={styles.promoButton}>
-              <Text style={styles.promoButtonText}>Partager</Text>
-              <Ionicons name="arrow-forward" size={16} color="#059669" />
+              <Text style={styles.promoButtonText}>Inviter</Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.primary} />
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -396,27 +334,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
   },
   heroStat: {
     flex: 1,
     alignItems: 'center',
   },
   heroStatValue: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.xxl,
     fontFamily: fontFamily.bold,
     color: '#fff',
   },
   heroStatLabel: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontFamily: fontFamily.medium,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: spacing.xs,
   },
   heroStatDivider: {
     width: 1,
-    height: 30,
+    height: 40,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   cardAccent: {
@@ -454,6 +392,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
   },
   quickActionLabel: {
     fontSize: fontSize.xs,
@@ -591,7 +530,7 @@ const styles = StyleSheet.create({
   promoButtonText: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.semibold,
-    color: '#059669',
+    color: colors.primary,
   },
   // Footer
   footer: {

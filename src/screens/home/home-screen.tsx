@@ -178,7 +178,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={['#7c3aed', '#6d28d9']}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.quickFeatureGradient}
             >
               <Ionicons name="book" size={22} color="#fff" />
@@ -192,7 +192,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={['#059669', '#047857']}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.quickFeatureGradient}
             >
               <Ionicons name="help-circle" size={22} color="#fff" />
@@ -206,7 +206,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={['#2563eb', '#1d4ed8']}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.quickFeatureGradient}
             >
               <Ionicons name="globe" size={22} color="#fff" />
@@ -220,7 +220,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={['#d97706', '#b45309']}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.quickFeatureGradient}
             >
               <Ionicons name="calendar" size={22} color="#fff" />
@@ -528,16 +528,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalList}
           >
-            {mockHymns.slice(0, 6).map((hymn, index) => {
-              const hymnColors = [
-                { bg: '#fef3c7', text: '#d97706', accent: '#fbbf24' },
-                { bg: '#dbeafe', text: '#2563eb', accent: '#60a5fa' },
-                { bg: '#dcfce7', text: '#16a34a', accent: '#4ade80' },
-                { bg: '#fce7f3', text: '#db2777', accent: '#f472b6' },
-                { bg: '#e0e7ff', text: '#4f46e5', accent: '#818cf8' },
-                { bg: '#fed7d7', text: '#c53030', accent: '#f87171' },
-              ];
-              const colorScheme = hymnColors[index % hymnColors.length];
+            {mockHymns.slice(0, 6).map((hymn) => {
               return (
                 <TouchableOpacity
                   key={hymn.id}
@@ -545,18 +536,18 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
                   onPress={() => navigation.navigate('HymnDetail', { hymn })}
                   activeOpacity={0.9}
                 >
-                  <View style={[styles.hymnNumberWrap, { backgroundColor: colorScheme.bg }]}>
-                    <Text style={[styles.hymnNumber, { color: colorScheme.text }]}>{hymn.number}</Text>
-                    <View style={[styles.hymnMusicIcon, { backgroundColor: colorScheme.accent }]}>
+                  <View style={[styles.hymnNumberWrap, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.hymnNumber, { color: colors.primary }]}>{hymn.number}</Text>
+                    <View style={[styles.hymnMusicIcon, { backgroundColor: colors.primary }]}>
                       <Ionicons name="musical-note" size={10} color="#fff" />
                     </View>
                   </View>
                   <Text style={styles.hymnTitle} numberOfLines={2}>{hymn.title}</Text>
                   <View style={styles.hymnFooter}>
-                    <View style={[styles.hymnCategoryWrap, { backgroundColor: colorScheme.bg }]}>
-                      <Text style={[styles.hymnCategory, { color: colorScheme.text }]}>{hymn.category}</Text>
+                    <View style={[styles.hymnCategoryWrap, { backgroundColor: colors.primaryLight }]}>
+                      <Text style={[styles.hymnCategory, { color: colors.primary }]}>{hymn.category}</Text>
                     </View>
-                    <Ionicons name="play-circle" size={24} color={colorScheme.accent} />
+                    <Ionicons name="play-circle" size={24} color={colors.primary} />
                   </View>
                 </TouchableOpacity>
               );

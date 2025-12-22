@@ -71,6 +71,7 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(30);
   const [progressAnim] = useState(new Animated.Value(0));
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
 
   const currentQuestion = mockQuestions[currentIndex];
   const totalQuestions = mockQuestions.length;
@@ -103,6 +104,7 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
   const handleTimeout = useCallback(() => {
     if (!isAnswered) {
       setIsAnswered(true);
+      setUserAnswers((prev) => [...prev, -1]); // -1 indicates timeout/no answer
       setTimeout(() => goToNextQuestion(), 2000);
     }
   }, [isAnswered]);
@@ -112,6 +114,7 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
 
     setSelectedAnswer(index);
     setIsAnswered(true);
+    setUserAnswers((prev) => [...prev, index]);
 
     if (index === currentQuestion.correctAnswer) {
       setScore((prev) => prev + 1);
@@ -122,10 +125,17 @@ export function QuizPlayScreen({ navigation, route }: QuizPlayScreenProps) {
 
   const goToNextQuestion = () => {
     if (currentIndex + 1 >= totalQuestions) {
-      navigation.replace('QuizResult', {
+      const finalScore = selectedAnswer === currentQuestion.correctAnswer ? score + 1 : score;
+      const finalAnswers = [...userAnswers];
+      if (selectedAnswer !== null && !finalAnswers.includes(selectedAnswer)) {
+        finalAnswers.push(selectedAnswer);
+      }
+      navigation.navigate('QuizResult', {
         quiz,
-        score: selectedAnswer === currentQuestion.correctAnswer ? score + 1 : score,
+        score: finalScore,
         totalQuestions,
+        userAnswers: finalAnswers,
+        questions: mockQuestions,
       });
     } else {
       setCurrentIndex((prev) => prev + 1);

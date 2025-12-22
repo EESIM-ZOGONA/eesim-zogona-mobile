@@ -142,13 +142,23 @@ export type RootStackParamList = {
   MyFavorites: undefined;
   SocialMedia: undefined;
   Meditations: undefined;
+  MeditationList: { category?: MeditationCategory };
   MeditationDetail: { meditation: Meditation };
   Quiz: undefined;
+  QuizCategory: { category: QuizCategory };
   QuizPlay: { quiz: Quiz };
-  QuizResult: { quiz: Quiz; score: number; totalQuestions: number };
+  QuizResult: {
+    quiz: Quiz;
+    score: number;
+    totalQuestions: number;
+    userAnswers?: number[];
+    questions?: QuizQuestion[];
+  };
 };
 
 // Meditation types
+export type MeditationCategory = 'foi' | 'amour' | 'pardon' | 'priere' | 'esperance' | 'sagesse' | 'paix';
+
 export interface Meditation {
   id: string;
   title: string;
@@ -160,6 +170,8 @@ export interface Meditation {
   date: string;
   author?: string;
   imageUrl?: string;
+  category: MeditationCategory;
+  relatedHymnId?: string;
 }
 
 // Quiz types

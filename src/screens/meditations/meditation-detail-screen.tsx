@@ -109,7 +109,7 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
         {/* Content Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleWrap}>
-            <View style={[styles.sectionDot, { backgroundColor: '#059669' }]} />
+            <View style={styles.sectionDot} />
             <Text style={styles.sectionTitle}>Méditation</Text>
           </View>
         </View>
@@ -121,14 +121,14 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
         {/* Reflection Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleWrap}>
-            <View style={[styles.sectionDot, { backgroundColor: '#d97706' }]} />
+            <View style={styles.sectionDot} />
             <Text style={styles.sectionTitle}>Réflexion</Text>
           </View>
         </View>
 
         <View style={styles.reflectionCard}>
           <View style={styles.reflectionIconWrap}>
-            <Ionicons name="bulb" size={24} color="#d97706" />
+            <Ionicons name="bulb" size={24} color={colors.primary} />
           </View>
           <Text style={styles.reflectionText}>{meditation.reflection}</Text>
         </View>
@@ -136,19 +136,19 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
         {/* Prayer Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleWrap}>
-            <View style={[styles.sectionDot, { backgroundColor: '#7c3aed' }]} />
+            <View style={[styles.sectionDot, { backgroundColor: colors.primary }]} />
             <Text style={styles.sectionTitle}>Prière</Text>
           </View>
         </View>
 
         <LinearGradient
-          colors={['#7c3aed', '#6d28d9']}
+          colors={[colors.primary, colors.primaryDark]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.prayerCard}
         >
           <View style={styles.prayerIconWrap}>
-            <Ionicons name="hand-left" size={24} color="#7c3aed" />
+            <Ionicons name="hand-left" size={24} color={colors.primary} />
           </View>
           <Text style={styles.prayerText}>{meditation.prayer}</Text>
           <View style={styles.prayerAccent} />
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     color: colors.text.primary,
     fontStyle: 'italic',
-    lineHeight: 28,
+    lineHeight: 30,
   },
   verseRefWrap: {
     flexDirection: 'row',
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontFamily: fontFamily.regular,
     color: colors.text.primary,
-    lineHeight: 26,
+    lineHeight: 28,
   },
   // Reflection Card
   reflectionCard: {
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontFamily: fontFamily.medium,
     color: '#92400e',
-    lineHeight: 24,
+    lineHeight: 26,
   },
   // Prayer Card
   prayerCard: {
@@ -412,11 +412,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   prayerText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
     fontFamily: fontFamily.medium,
     color: '#fff',
     fontStyle: 'italic',
-    lineHeight: 26,
+    lineHeight: 30,
   },
   prayerAccent: {
     position: 'absolute',
@@ -454,8 +454,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionText: {
-    fontSize: fontSize.xs,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.primary,
   },
 });

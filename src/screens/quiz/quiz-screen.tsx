@@ -8,9 +8,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, Quiz } from '../../types';
+import { RootStackParamList, Quiz, QuizCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 
 interface QuizScreenProps {
@@ -87,16 +88,40 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
     streak: 5,
   };
 
+  // Display only first 3 quizzes on main screen
+  const displayedQuizzes = quizzes.slice(0, 3);
+
+  const handleCategoryPress = (category: QuizCategory) => {
+    navigation.navigate('QuizCategory', { category });
+  };
+
+  const goToHome = () => {
+    // Navigate back to Main and then to HomeTab
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Main',
+            state: {
+              routes: [{ name: 'HomeTab' }],
+            },
+          },
+        ],
+      })
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={goToHome}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Ionicons name="home" size={22} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Quiz Biblique</Text>
@@ -168,14 +193,14 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={['#059669', '#047857']}
+            colors={[colors.primary, colors.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.dailyChallengeGradient}
           >
             <View style={styles.dailyChallengeContent}>
               <View style={styles.dailyChallengeIcon}>
-                <Ionicons name="flash" size={28} color="#059669" />
+                <Ionicons name="flash" size={28} color={colors.primary} />
               </View>
               <View style={styles.dailyChallengeInfo}>
                 <Text style={styles.dailyChallengeTitle}>Quiz rapide</Text>
@@ -201,10 +226,11 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
             <TouchableOpacity
               key={key}
               style={styles.categoryCard}
+              onPress={() => handleCategoryPress(key as QuizCategory)}
               activeOpacity={0.8}
             >
-              <View style={[styles.categoryIcon, { backgroundColor: config.bg }]}>
-                <Ionicons name={config.icon} size={24} color={config.color} />
+              <View style={[styles.categoryIcon, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name={config.icon} size={24} color={colors.primary} />
               </View>
               <Text style={styles.categoryLabel}>
                 {key === 'ancien_testament' ? 'AT' :
@@ -220,24 +246,19 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleWrap}>
             <View style={styles.sectionDot} />
-            <Text style={styles.sectionTitle}>Tous les quiz</Text>
+            <Text style={styles.sectionTitle}>Quiz populaires</Text>
           </View>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={styles.seeAllText}>Voir tout</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('QuizCategory', { category: 'general' })}
+          >
+            <Text style={styles.seeAllText}>Voir plus</Text>
           </TouchableOpacity>
         </View>
 
-        {quizzes.map((quiz, index) => {
+        {displayedQuizzes.map((quiz) => {
           const catConfig = categoryConfig[quiz.category];
           const diffConfig = difficultyConfig[quiz.difficulty];
-
-          const gradientColors = [
-            ['#030a7f', '#020866'] as [string, string],
-            ['#d97706', '#b45309'] as [string, string],
-            ['#dc2626', '#b91c1c'] as [string, string],
-            ['#7c3aed', '#6d28d9'] as [string, string],
-            ['#059669', '#047857'] as [string, string],
-          ];
 
           return (
             <TouchableOpacity
@@ -247,7 +268,7 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
               activeOpacity={0.9}
             >
               <LinearGradient
-                colors={gradientColors[index % gradientColors.length]}
+                colors={[colors.primary, colors.primaryDark]}
                 style={styles.quizIconWrap}
               >
                 <Ionicons name={catConfig.icon} size={24} color="#fff" />
@@ -512,6 +533,41 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
     textAlign: 'center',
+  },
+  categoryCardSelected: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  categoryLabelSelected: {
+    color: colors.primary,
+    fontFamily: fontFamily.bold,
+  },
+  resetFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  resetFilterText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
+    color: colors.primary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
   },
   // Quiz Card
   quizCard: {

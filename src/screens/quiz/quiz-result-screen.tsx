@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Share,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,8 +22,13 @@ interface QuizResultScreenProps {
 }
 
 export function QuizResultScreen({ navigation, route }: QuizResultScreenProps) {
-  const { quiz, score, totalQuestions } = route.params;
+  const { quiz, score, totalQuestions, userAnswers, questions } = route.params;
   const percentage = Math.round((score / totalQuestions) * 100);
+  const [showErrors, setShowErrors] = useState(false);
+
+  const wrongAnswers = questions && userAnswers
+    ? questions.filter((q, index) => userAnswers[index] !== q.correctAnswer)
+    : [];
 
   const getResultConfig = () => {
     if (percentage >= 80) {
@@ -29,32 +36,32 @@ export function QuizResultScreen({ navigation, route }: QuizResultScreenProps) {
         icon: 'trophy' as const,
         title: 'Excellent !',
         subtitle: 'Vous êtes un expert biblique !',
-        gradient: ['#059669', '#047857'] as [string, string],
-        iconColor: '#059669',
+        gradient: [colors.primary, colors.primaryDark] as [string, string],
+        iconColor: colors.primary,
       };
     } else if (percentage >= 60) {
       return {
         icon: 'thumbs-up' as const,
         title: 'Bien joué !',
         subtitle: 'Vous avez de bonnes connaissances !',
-        gradient: ['#2563eb', '#1d4ed8'] as [string, string],
-        iconColor: '#2563eb',
+        gradient: [colors.primary, colors.primaryDark] as [string, string],
+        iconColor: colors.primary,
       };
     } else if (percentage >= 40) {
       return {
         icon: 'book' as const,
         title: 'Pas mal !',
         subtitle: 'Continuez à apprendre !',
-        gradient: ['#d97706', '#b45309'] as [string, string],
-        iconColor: '#d97706',
+        gradient: [colors.primary, colors.primaryDark] as [string, string],
+        iconColor: colors.primary,
       };
     } else {
       return {
         icon: 'school' as const,
         title: 'Courage !',
         subtitle: 'La pratique rend parfait !',
-        gradient: ['#7c3aed', '#6d28d9'] as [string, string],
-        iconColor: '#7c3aed',
+        gradient: [colors.primary, colors.primaryDark] as [string, string],
+        iconColor: colors.primary,
       };
     }
   };
@@ -72,9 +79,113 @@ export function QuizResultScreen({ navigation, route }: QuizResultScreenProps) {
     }
   };
 
+  const renderErrorsModal = () => (
+    <Modal
+      visible={showErrors}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowErrors(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Revue des erreurs</Text>
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setShowErrors(false)}
+          >
+            <Ionicons name="close" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.modalContent}
+          contentContainerStyle={styles.modalScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {wrongAnswers.length === 0 ? (
+            <View style={styles.noErrorsContainer}>
+              <View style={styles.noErrorsIcon}>
+                <Ionicons name="checkmark-circle" size={64} color="#16a34a" />
+              </View>
+              <Text style={styles.noErrorsTitle}>Parfait !</Text>
+              <Text style={styles.noErrorsText}>
+                Vous n'avez fait aucune erreur. Félicitations !
+              </Text>
+            </View>
+          ) : (
+            wrongAnswers.map((question, index) => {
+              const questionIndex = questions?.indexOf(question) ?? 0;
+              const userAnswer = userAnswers?.[questionIndex] ?? -1;
+
+              return (
+                <View key={question.id} style={styles.errorCard}>
+                  <View style={styles.errorHeader}>
+                    <View style={styles.errorBadge}>
+                      <Text style={styles.errorBadgeText}>Question {questionIndex + 1}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.errorQuestion}>{question.question}</Text>
+
+                  <View style={styles.answersContainer}>
+                    {/* User's wrong answer */}
+                    <View style={styles.answerRow}>
+                      <View style={styles.answerIconWrong}>
+                        <Ionicons name="close" size={16} color="#fff" />
+                      </View>
+                      <View style={styles.answerContent}>
+                        <Text style={styles.answerLabel}>Votre réponse</Text>
+                        <Text style={styles.answerTextWrong}>
+                          {userAnswer === -1
+                            ? 'Temps écoulé'
+                            : question.options[userAnswer] ?? 'Non répondu'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Correct answer */}
+                    <View style={styles.answerRow}>
+                      <View style={styles.answerIconCorrect}>
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                      </View>
+                      <View style={styles.answerContent}>
+                        <Text style={styles.answerLabel}>Bonne réponse</Text>
+                        <Text style={styles.answerTextCorrect}>
+                          {question.options[question.correctAnswer]}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Explanation */}
+                  {question.explanation && (
+                    <View style={styles.explanationBox}>
+                      <View style={styles.explanationIcon}>
+                        <Ionicons name="bulb" size={18} color={colors.primary} />
+                      </View>
+                      <View style={styles.explanationContent}>
+                        <Text style={styles.explanationText}>{question.explanation}</Text>
+                        {question.verseRef && (
+                          <Text style={styles.verseRef}>{question.verseRef}</Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
         {/* Result Card */}
         <LinearGradient
           colors={resultConfig.gradient}
@@ -113,13 +224,33 @@ export function QuizResultScreen({ navigation, route }: QuizResultScreenProps) {
             <Text style={styles.statLabel}>Incorrectes</Text>
           </View>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="star" size={22} color="#d97706" />
+            <View style={[styles.statIcon, { backgroundColor: colors.primaryLight }]}>
+              <Ionicons name="star" size={22} color={colors.primary} />
             </View>
             <Text style={styles.statValue}>+{score * 10}</Text>
             <Text style={styles.statLabel}>Points</Text>
           </View>
         </View>
+
+        {/* View Errors Button */}
+        {questions && userAnswers && wrongAnswers.length > 0 && (
+          <TouchableOpacity
+            style={styles.viewErrorsButton}
+            onPress={() => setShowErrors(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.viewErrorsIcon}>
+              <Ionicons name="eye" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.viewErrorsContent}>
+              <Text style={styles.viewErrorsTitle}>Voir mes erreurs</Text>
+              <Text style={styles.viewErrorsSubtitle}>
+                {wrongAnswers.length} question{wrongAnswers.length > 1 ? 's' : ''} à revoir
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        )}
 
         {/* Quiz Info */}
         <View style={styles.quizInfo}>
@@ -153,15 +284,44 @@ export function QuizResultScreen({ navigation, route }: QuizResultScreenProps) {
           </TouchableOpacity>
         </View>
 
+        {/* Nouveau Quiz Button */}
         <TouchableOpacity
-          style={styles.homeButton}
-          onPress={() => navigation.navigate('Quiz')}
-          activeOpacity={0.7}
+          style={styles.newQuizButton}
+          onPress={() => navigation.reset({
+            index: 1,
+            routes: [
+              { name: 'Quiz' },
+              { name: 'QuizPlay', params: { quiz } },
+            ],
+          })}
+          activeOpacity={0.8}
         >
-          <Ionicons name="grid" size={18} color={colors.text.secondary} />
-          <Text style={styles.homeText}>Voir tous les quiz</Text>
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.newQuizGradient}
+          >
+            <Ionicons name="play-circle" size={22} color="#fff" />
+            <Text style={styles.newQuizText}>Nouveau Quiz</Text>
+          </LinearGradient>
         </TouchableOpacity>
-      </View>
+
+        {/* Voir tous les quiz Button */}
+        <TouchableOpacity
+          style={styles.allQuizzesButton}
+          onPress={() => navigation.reset({
+            index: 0,
+            routes: [{ name: 'Quiz' }],
+          })}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="grid" size={20} color={colors.primary} />
+          <Text style={styles.allQuizzesText}>Voir tous les quiz</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {renderErrorsModal()}
     </SafeAreaView>
   );
 }
@@ -172,9 +332,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
+    paddingBottom: spacing.xxxl,
   },
   // Result Card
   resultCard: {
@@ -238,7 +398,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   statCard: {
     flex: 1,
@@ -269,6 +429,38 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
+    marginTop: 2,
+  },
+  // View Errors Button
+  viewErrorsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  viewErrorsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewErrorsContent: {
+    flex: 1,
+  },
+  viewErrorsTitle: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: colors.primary,
+  },
+  viewErrorsSubtitle: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.primaryDark,
     marginTop: 2,
   },
   // Quiz Info
@@ -327,16 +519,198 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semibold,
     color: colors.primary,
   },
-  homeButton: {
+  newQuizButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  newQuizGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: spacing.lg,
     gap: spacing.sm,
-    paddingVertical: spacing.md,
   },
-  homeText: {
+  newQuizText: {
     fontSize: fontSize.md,
+    fontFamily: fontFamily.bold,
+    color: '#fff',
+  },
+  allQuizzesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  allQuizzesText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: colors.primary,
+  },
+  // Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: fontSize.xl,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+  },
+  modalCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  // No Errors
+  noErrorsContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxxl,
+  },
+  noErrorsIcon: {
+    marginBottom: spacing.lg,
+  },
+  noErrorsTitle: {
+    fontSize: fontSize.xl,
+    fontFamily: fontFamily.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  noErrorsText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  // Error Card
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  errorHeader: {
+    marginBottom: spacing.md,
+  },
+  errorBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  errorBadgeText: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.bold,
+    color: colors.primary,
+  },
+  errorQuestion: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
+    lineHeight: 24,
+  },
+  answersContainer: {
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  answerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  answerIconWrong: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  answerIconCorrect: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  answerContent: {
+    flex: 1,
+  },
+  answerLabel: {
+    fontSize: fontSize.xs,
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,
+    marginBottom: 2,
+  },
+  answerTextWrong: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: '#dc2626',
+  },
+  answerTextCorrect: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: '#16a34a',
+  },
+  explanationBox: {
+    flexDirection: 'row',
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  explanationIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explanationContent: {
+    flex: 1,
+  },
+  explanationText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.primaryDark,
+    lineHeight: 20,
+  },
+  verseRef: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.bold,
+    color: colors.primary,
+    marginTop: spacing.xs,
   },
 });
