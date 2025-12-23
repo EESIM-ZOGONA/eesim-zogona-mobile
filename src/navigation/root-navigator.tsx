@@ -26,7 +26,7 @@ import {
   SocialMediaScreen,
 } from '../screens/profile';
 import { MeditationsScreen, MeditationDetailScreen, MeditationListScreen } from '../screens/meditations';
-import { QuizScreen, QuizCategoryScreen, QuizPlayScreen, QuizResultScreen } from '../screens/quiz';
+import { QuizScreen, QuizCategoryScreen, QuizPlayScreen, QuizResultScreen, QuizBooksScreen, QuizBookPlayScreen } from '../screens/quiz';
 import { BibleScreen, BibleBookScreen, BibleChapterScreen, VerseCompareScreen } from '../screens/bible';
 import { NotesScreen, NoteDetailScreen, NoteEditScreen } from '../screens/notes';
 import { ReadingPlansScreen, ReadingPlanDetailScreen, ReadingPlanDayScreen, ReadingPlanReaderScreen } from '../screens/reading-plans';
@@ -91,6 +91,8 @@ export function RootNavigator() {
         <Stack.Screen name={SCREENS.QUIZ_CATEGORY} component={QuizCategoryScreen} />
         <Stack.Screen name={SCREENS.QUIZ_PLAY} component={QuizPlayScreen} />
         <Stack.Screen name={SCREENS.QUIZ_RESULT} component={QuizResultScreen} />
+        <Stack.Screen name={SCREENS.QUIZ_BOOKS} component={QuizBooksScreen} />
+        <Stack.Screen name={SCREENS.QUIZ_BOOK_PLAY} component={QuizBookPlayScreen} />
         <Stack.Screen name={SCREENS.BIBLE} component={BibleScreen} />
         <Stack.Screen name={SCREENS.BIBLE_BOOK} component={BibleBookScreen} />
         <Stack.Screen name={SCREENS.BIBLE_CHAPTER} component={BibleChapterScreen} />

@@ -157,6 +157,8 @@ export type RootStackParamList = {
     userAnswers?: number[];
     questions?: QuizQuestion[];
   };
+  [SCREENS.QUIZ_BOOKS]: undefined;
+  [SCREENS.QUIZ_BOOK_PLAY]: { bookQuiz: BookQuiz };
   [SCREENS.BIBLE]: undefined;
   [SCREENS.BIBLE_BOOK]: { book: BibleBook };
   [SCREENS.BIBLE_CHAPTER]: { bookId: string; bookName: string; chapter: number; scrollToVerse?: number };
@@ -263,7 +265,27 @@ export interface QuizQuestion {
   verseRef?: string;
 }
 
-export type QuizCategory = 'ancien_testament' | 'nouveau_testament' | 'personnages' | 'versets' | 'general';
+export type QuizCategory = 'ancien_testament' | 'nouveau_testament' | 'personnages' | 'versets' | 'general' | 'livres';
+
+// Book Quiz types
+export interface BookQuiz {
+  id: string;
+  bookId: string;
+  bookName: string;
+  testament: 'old' | 'new';
+  questionCount: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface BookQuizQuestion {
+  id: string;
+  bookId: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation?: string;
+  verseRef?: string;
+}
 
 export type MainTabParamList = {
   [SCREENS.HOME_TAB]: undefined;

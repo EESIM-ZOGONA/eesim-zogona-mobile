@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,30 +6,20 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDebouncedCallback } from 'use-debounce';
-import { RootStackParamList, Quiz, QuizCategory } from '../../types';
+import { RootStackParamList, BookQuiz } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
-import { allQuizzes } from '../../data/quiz-data';
+import { useBookQuizzes } from '../../hooks';
 
-interface QuizCategoryScreenProps {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'QuizCategory'>;
-  route: RouteProp<RootStackParamList, 'QuizCategory'>;
+interface QuizBooksScreenProps {
+  navigation: NativeStackNavigationProp<RootStackParamList, 'QuizBooks'>;
 }
-
-const categoryConfig: Record<QuizCategory, { icon: keyof typeof Ionicons.glyphMap; label: string }> = {
-  personnages: { icon: 'people', label: 'Personnages' },
-  ancien_testament: { icon: 'book', label: 'Ancien Testament' },
-  nouveau_testament: { icon: 'heart', label: 'Nouveau Testament' },
-  versets: { icon: 'document-text', label: 'Versets' },
-  general: { icon: 'star', label: 'Général' },
-  livres: { icon: 'library', label: 'Quiz par Livre' },
-};
 
 const difficultyConfig = {
   easy: { label: 'Facile', color: '#16a34a' },
@@ -37,15 +27,14 @@ const difficultyConfig = {
   hard: { label: 'Difficile', color: '#dc2626' },
 };
 
-type DifficultyFilter = 'all' | 'easy' | 'medium' | 'hard';
+type TestamentFilter = 'all' | 'old' | 'new';
 
-export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProps) {
-  const { category } = route.params;
+export function QuizBooksScreen({ navigation }: QuizBooksScreenProps) {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('all');
+  const [selectedTestament, setSelectedTestament] = useState<TestamentFilter>('all');
 
-  const categoryInfo = categoryConfig[category];
+  const { bookQuizzes, loading, initialized, totalQuestions } = useBookQuizzes();
 
   // Debounced search
   const debouncedSearch = useDebouncedCallback((value: string) => {
@@ -64,48 +53,47 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
 
   // Filter quizzes
   const filteredQuizzes = useMemo(() => {
-    let result = allQuizzes.filter((quiz) => quiz.category === category);
+    let result = bookQuizzes;
 
-    if (selectedDifficulty !== 'all') {
-      result = result.filter((quiz) => quiz.difficulty === selectedDifficulty);
+    if (selectedTestament !== 'all') {
+      result = result.filter((quiz) => quiz.testament === selectedTestament);
     }
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (quiz) =>
-          quiz.title.toLowerCase().includes(query) ||
-          quiz.description.toLowerCase().includes(query)
-      );
+      result = result.filter((quiz) => quiz.bookName.toLowerCase().includes(query));
     }
 
     return result;
-  }, [category, selectedDifficulty, searchQuery]);
+  }, [bookQuizzes, selectedTestament, searchQuery]);
 
-  const renderQuizCard = ({ item: quiz }: { item: Quiz }) => {
+  const oldTestamentQuizzes = useMemo(() =>
+    bookQuizzes.filter(q => q.testament === 'old'), [bookQuizzes]);
+  const newTestamentQuizzes = useMemo(() =>
+    bookQuizzes.filter(q => q.testament === 'new'), [bookQuizzes]);
+
+  const renderBookCard = ({ item: quiz }: { item: BookQuiz }) => {
     const diffConfig = difficultyConfig[quiz.difficulty];
+    const isOldTestament = quiz.testament === 'old';
 
     return (
       <TouchableOpacity
-        style={styles.quizCard}
-        onPress={() => navigation.navigate('QuizPlay', { quiz })}
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('QuizBookPlay', { bookQuiz: quiz })}
         activeOpacity={0.9}
       >
         <LinearGradient
-          colors={[colors.primary, colors.primaryDark]}
-          style={styles.quizIconWrap}
+          colors={isOldTestament ? ['#d97706', '#b45309'] : ['#dc2626', '#b91c1c']}
+          style={styles.bookIconWrap}
         >
-          <Ionicons name={categoryInfo.icon} size={24} color="#fff" />
+          <Text style={styles.bookAbbrev}>{quiz.bookId.substring(0, 2)}</Text>
         </LinearGradient>
-        <View style={styles.quizInfo}>
-          <Text style={styles.quizTitle}>{quiz.title}</Text>
-          <Text style={styles.quizDescription} numberOfLines={2}>
-            {quiz.description}
-          </Text>
-          <View style={styles.quizMeta}>
-            <View style={styles.quizMetaItem}>
+        <View style={styles.bookInfo}>
+          <Text style={styles.bookName}>{quiz.bookName}</Text>
+          <View style={styles.bookMeta}>
+            <View style={styles.bookMetaItem}>
               <Ionicons name="help-circle-outline" size={14} color={colors.text.secondary} />
-              <Text style={styles.quizMetaText}>{quiz.questionCount} questions</Text>
+              <Text style={styles.bookMetaText}>{quiz.questionCount} questions</Text>
             </View>
             <View style={[styles.difficultyBadge, { backgroundColor: `${diffConfig.color}20` }]}>
               <Text style={[styles.difficultyText, { color: diffConfig.color }]}>
@@ -131,11 +119,11 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
         style={styles.heroCard}
       >
         <View style={styles.heroIconWrap}>
-          <Ionicons name={categoryInfo.icon} size={32} color={colors.primary} />
+          <Ionicons name="library" size={32} color={colors.primary} />
         </View>
-        <Text style={styles.heroTitle}>{categoryInfo.label}</Text>
+        <Text style={styles.heroTitle}>Quiz par Livre</Text>
         <Text style={styles.heroSubtitle}>
-          {filteredQuizzes.length} quiz disponible{filteredQuizzes.length > 1 ? 's' : ''}
+          {bookQuizzes.length} livres • {totalQuestions} questions
         </Text>
         <View style={styles.cardAccent} />
       </LinearGradient>
@@ -146,7 +134,7 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
           <Ionicons name="search" size={20} color={colors.text.secondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher un quiz..."
+            placeholder="Rechercher un livre..."
             placeholderTextColor={colors.text.tertiary}
             value={searchInput}
             onChangeText={handleSearchChange}
@@ -161,33 +149,47 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
         </View>
       </View>
 
-      {/* Difficulty Filters */}
+      {/* Testament Filters */}
       <View style={styles.filtersRow}>
-        {(['all', 'easy', 'medium', 'hard'] as DifficultyFilter[]).map((difficulty) => {
-          const isSelected = selectedDifficulty === difficulty;
-          const label = difficulty === 'all' ? 'Tous' : difficultyConfig[difficulty].label;
-
-          return (
-            <TouchableOpacity
-              key={difficulty}
-              style={[
-                styles.filterChip,
-                isSelected && styles.filterChipActive,
-              ]}
-              onPress={() => setSelectedDifficulty(difficulty)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isSelected && styles.filterChipTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        <TouchableOpacity
+          style={[styles.filterChip, selectedTestament === 'all' && styles.filterChipActive]}
+          onPress={() => setSelectedTestament('all')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.filterChipText, selectedTestament === 'all' && styles.filterChipTextActive]}>
+            Tous ({bookQuizzes.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, selectedTestament === 'old' && styles.filterChipActiveOld]}
+          onPress={() => setSelectedTestament('old')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="book"
+            size={14}
+            color={selectedTestament === 'old' ? '#fff' : '#d97706'}
+            style={styles.filterIcon}
+          />
+          <Text style={[styles.filterChipText, selectedTestament === 'old' && styles.filterChipTextActive]}>
+            AT ({oldTestamentQuizzes.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, selectedTestament === 'new' && styles.filterChipActiveNew]}
+          onPress={() => setSelectedTestament('new')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="heart"
+            size={14}
+            color={selectedTestament === 'new' ? '#fff' : '#dc2626'}
+            style={styles.filterIcon}
+          />
+          <Text style={[styles.filterChipText, selectedTestament === 'new' && styles.filterChipTextActive]}>
+            NT ({newTestamentQuizzes.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Results Header */}
@@ -195,7 +197,7 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
         <View style={styles.sectionTitleWrap}>
           <View style={styles.sectionDot} />
           <Text style={styles.sectionTitle}>
-            {searchQuery ? 'Résultats' : 'Quiz disponibles'}
+            {searchQuery ? 'Résultats' : 'Livres disponibles'}
           </Text>
         </View>
         <Text style={styles.resultCount}>{filteredQuizzes.length}</Text>
@@ -206,12 +208,23 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
   const EmptyList = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="search" size={48} color={colors.text.tertiary} />
-      <Text style={styles.emptyTitle}>Aucun quiz trouvé</Text>
+      <Text style={styles.emptyTitle}>Aucun livre trouvé</Text>
       <Text style={styles.emptyText}>
         Essayez de modifier vos critères de recherche
       </Text>
     </View>
   );
+
+  if (loading && !initialized) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement des quiz...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -225,15 +238,15 @@ export function QuizCategoryScreen({ navigation, route }: QuizCategoryScreenProp
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{categoryInfo.label}</Text>
-          <Text style={styles.headerSubtitle}>Quiz par catégorie</Text>
+          <Text style={styles.headerTitle}>Quiz par Livre</Text>
+          <Text style={styles.headerSubtitle}>Testez vos connaissances</Text>
         </View>
         <View style={styles.headerRight} />
       </View>
 
       <FlatList
         data={filteredQuizzes}
-        renderItem={renderQuizCard}
+        renderItem={renderBookCard}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={EmptyList}
@@ -248,6 +261,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.text.secondary,
   },
   // Header
   header: {
@@ -352,6 +376,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
@@ -359,6 +385,15 @@ const styles = StyleSheet.create({
   },
   filterChipActive: {
     backgroundColor: colors.primary,
+  },
+  filterChipActiveOld: {
+    backgroundColor: '#d97706',
+  },
+  filterChipActiveNew: {
+    backgroundColor: '#dc2626',
+  },
+  filterIcon: {
+    marginRight: spacing.xs,
   },
   filterChipText: {
     fontSize: fontSize.sm,
@@ -396,8 +431,8 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.primary,
   },
-  // Quiz Card
-  quizCard: {
+  // Book Card
+  bookCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -411,40 +446,39 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  quizIconWrap: {
+  bookIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quizInfo: {
+  bookAbbrev: {
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.bold,
+    color: '#fff',
+    textTransform: 'uppercase',
+  },
+  bookInfo: {
     flex: 1,
   },
-  quizTitle: {
+  bookName: {
     fontSize: fontSize.md,
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
-    marginBottom: 2,
-  },
-  quizDescription: {
-    fontSize: fontSize.sm,
-    fontFamily: fontFamily.regular,
-    color: colors.text.secondary,
     marginBottom: spacing.xs,
-    lineHeight: 20,
   },
-  quizMeta: {
+  bookMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  quizMetaItem: {
+  bookMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  quizMetaText: {
+  bookMetaText: {
     fontSize: fontSize.xs,
     fontFamily: fontFamily.medium,
     color: colors.text.secondary,

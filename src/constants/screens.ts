@@ -45,6 +45,8 @@ export const SCREENS = {
   QUIZ_CATEGORY: 'QuizCategory',
   QUIZ_PLAY: 'QuizPlay',
   QUIZ_RESULT: 'QuizResult',
+  QUIZ_BOOKS: 'QuizBooks',
+  QUIZ_BOOK_PLAY: 'QuizBookPlay',
 
   BIBLE: 'Bible',
   BIBLE_BOOK: 'BibleBook',

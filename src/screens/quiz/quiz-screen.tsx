@@ -20,11 +20,12 @@ interface QuizScreenProps {
 }
 
 const categoryConfig = {
-  personnages: { icon: 'people' as const, color: '#2563eb', bg: '#dbeafe' },
-  ancien_testament: { icon: 'book' as const, color: '#d97706', bg: '#fef3c7' },
-  nouveau_testament: { icon: 'heart' as const, color: '#dc2626', bg: '#fee2e2' },
-  versets: { icon: 'document-text' as const, color: '#7c3aed', bg: '#ede9fe' },
-  general: { icon: 'star' as const, color: '#059669', bg: '#dcfce7' },
+  personnages: { icon: 'people' as const, color: '#2563eb', bg: '#dbeafe', label: 'Personnages' },
+  ancien_testament: { icon: 'book' as const, color: '#d97706', bg: '#fef3c7', label: 'AT' },
+  nouveau_testament: { icon: 'heart' as const, color: '#dc2626', bg: '#fee2e2', label: 'NT' },
+  versets: { icon: 'document-text' as const, color: '#7c3aed', bg: '#ede9fe', label: 'Versets' },
+  general: { icon: 'star' as const, color: '#059669', bg: '#dcfce7', label: 'Général' },
+  livres: { icon: 'library' as const, color: '#0891b2', bg: '#cffafe', label: 'Livres' },
 };
 
 const difficultyConfig = {
@@ -45,7 +46,11 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
   const displayedQuizzes = allQuizzes.slice(0, 3);
 
   const handleCategoryPress = (category: QuizCategory) => {
-    navigation.navigate('QuizCategory', { category });
+    if (category === 'livres') {
+      navigation.navigate('QuizBooks');
+    } else {
+      navigation.navigate('QuizCategory', { category });
+    }
   };
 
   const goToHome = () => {
@@ -186,10 +191,7 @@ export function QuizScreen({ navigation }: QuizScreenProps) {
                 <Ionicons name={config.icon} size={24} color={colors.primary} />
               </View>
               <Text style={styles.categoryLabel}>
-                {key === 'ancien_testament' ? 'AT' :
-                 key === 'nouveau_testament' ? 'NT' :
-                 key === 'personnages' ? 'Personnages' :
-                 key === 'versets' ? 'Versets' : 'Général'}
+                {config.label}
               </Text>
             </TouchableOpacity>
           ))}

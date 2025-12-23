@@ -223,6 +223,7 @@ export const questionsByCategory: Record<QuizCategory, QuizQuestion[]> = {
   nouveau_testament: questionsNouveauTestament,
   versets: questionsVersets,
   general: questionsGeneral,
+  livres: [], // Questions pour les livres sont dans SQLite
 };
 
 // Fonction pour obtenir les questions d'un quiz
