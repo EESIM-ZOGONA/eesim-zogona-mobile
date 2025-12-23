@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Share,
+  Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -40,14 +42,42 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
     }
   };
 
+  const formatMeditationText = () => {
+    return `📖 *${meditation.title.toUpperCase()}*
+
+📜 *VERSET DU JOUR*
+> _"${meditation.verse}"_
+> — *${meditation.verseRef}*
+
+📝 *MÉDITATION*
+${meditation.content}
+
+💡 *RÉFLEXION*
+${meditation.reflection}
+
+🙏 *PRIÈRE*
+_${meditation.prayer}_
+
+✝️ EE/SIM Zogona`;
+  };
+
   const shareMeditation = async () => {
     try {
       await Share.share({
-        message: `📖 Méditation du jour: ${meditation.title}\n\n"${meditation.verse}"\n— ${meditation.verseRef}\n\n${meditation.content}\n\n🙏 ${meditation.prayer}\n\n— EE/SIM Zogona`,
+        message: formatMeditationText(),
         title: meditation.title,
       });
     } catch (error) {
       console.error('Error sharing:', error);
+    }
+  };
+
+  const copyMeditation = async () => {
+    try {
+      await Clipboard.setStringAsync(formatMeditationText());
+      Alert.alert('Copié !', 'La méditation a été copiée dans le presse-papiers.');
+    } catch (error) {
+      console.error('Error copying:', error);
     }
   };
 
@@ -196,7 +226,7 @@ export function MeditationDetailScreen({ navigation, route }: MeditationDetailSc
             <Text style={styles.actionText}>Partager</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.actionButton} onPress={copyMeditation} activeOpacity={0.8}>
             <View style={styles.actionIcon}>
               <Ionicons name="copy-outline" size={22} color={colors.primary} />
             </View>
