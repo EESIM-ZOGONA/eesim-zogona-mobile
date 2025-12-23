@@ -11,3 +11,4 @@ export * from './use-reading-progress';
 export * from './use-hymns';
 export * from './use-featured-hymns';
 export * from './use-book-quiz';
+export * from './use-settings';
