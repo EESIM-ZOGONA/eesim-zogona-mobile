@@ -13,21 +13,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, MeditationCategory } from '../../types';
+import { RootStackParamList } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 import { useMeditations } from '../../hooks';
 import { parseVerseReference } from '../../utils/verse-parser';
-
-// Category icons mapping
-const categoryIcons: Record<MeditationCategory, keyof typeof Ionicons.glyphMap> = {
-  foi: 'shield-checkmark',
-  amour: 'heart',
-  pardon: 'hand-right',
-  priere: 'prism',
-  esperance: 'sunny',
-  sagesse: 'bulb',
-  paix: 'leaf',
-};
 
 interface MeditationsScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Meditations'>;
@@ -139,7 +128,7 @@ export function MeditationsScreen({ navigation }: MeditationsScreenProps) {
             activeOpacity={0.8}
           >
             <Ionicons
-              name={categoryIcons[cat.key]}
+              name={cat.icon as keyof typeof Ionicons.glyphMap}
               size={14}
               color={colors.primary}
               style={styles.categoryChipIcon}

@@ -176,7 +176,28 @@ export type RootStackParamList = {
 };
 
 // Meditation types
-export type MeditationCategory = 'foi' | 'amour' | 'pardon' | 'priere' | 'esperance' | 'sagesse' | 'paix';
+export type MeditationCategory =
+  | 'foi'
+  | 'amour'
+  | 'pardon'
+  | 'priere'
+  | 'esperance'
+  | 'sagesse'
+  | 'paix'
+  | 'identite'
+  | 'autorite'
+  | 'puissance'
+  | 'victoire'
+  | 'guerison'
+  | 'provision'
+  | 'protection'
+  | 'famille'
+  | 'service'
+  | 'saintete'
+  | 'obeissance'
+  | 'louange'
+  | 'grace'
+  | 'humilite';
 
 export interface Meditation {
   id: string;
@@ -188,10 +209,38 @@ export interface Meditation {
   prayer: string;
   date: string;
   author?: string;
-  imageUrl?: string;
   category: MeditationCategory;
-  relatedHymnId?: string;
 }
+
+export interface MeditationCategoryInfo {
+  key: MeditationCategory;
+  label: string;
+  icon: string;
+}
+
+export const MEDITATION_CATEGORIES: MeditationCategoryInfo[] = [
+  { key: 'foi', label: 'Foi', icon: 'shield-checkmark' },
+  { key: 'amour', label: 'Amour', icon: 'heart' },
+  { key: 'pardon', label: 'Pardon', icon: 'hand-right' },
+  { key: 'priere', label: 'Prière', icon: 'prism' },
+  { key: 'esperance', label: 'Espérance', icon: 'sunny' },
+  { key: 'sagesse', label: 'Sagesse', icon: 'bulb' },
+  { key: 'paix', label: 'Paix', icon: 'leaf' },
+  { key: 'identite', label: 'Identité en Christ', icon: 'person' },
+  { key: 'autorite', label: 'Autorité spirituelle', icon: 'key' },
+  { key: 'puissance', label: 'Puissance de Dieu', icon: 'flash' },
+  { key: 'victoire', label: 'Victoire', icon: 'trophy' },
+  { key: 'guerison', label: 'Guérison', icon: 'medkit' },
+  { key: 'provision', label: 'Provision divine', icon: 'gift' },
+  { key: 'protection', label: 'Protection', icon: 'shield' },
+  { key: 'famille', label: 'Famille', icon: 'people' },
+  { key: 'service', label: 'Service', icon: 'hand-left' },
+  { key: 'saintete', label: 'Sainteté', icon: 'sparkles' },
+  { key: 'obeissance', label: 'Obéissance', icon: 'checkmark-circle' },
+  { key: 'louange', label: 'Louange', icon: 'musical-notes' },
+  { key: 'grace', label: 'Grâce', icon: 'water' },
+  { key: 'humilite', label: 'Humilité', icon: 'heart-outline' },
+];
 
 // Quiz types
 export interface Quiz {

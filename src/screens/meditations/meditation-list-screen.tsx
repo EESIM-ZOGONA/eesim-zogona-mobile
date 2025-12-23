@@ -15,7 +15,7 @@ import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDebouncedCallback } from 'use-debounce';
-import { RootStackParamList, MeditationCategory, Meditation } from '../../types';
+import { RootStackParamList, Meditation, MeditationCategory } from '../../types';
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../constants/theme';
 import { useMeditations } from '../../hooks';
 
@@ -25,17 +25,6 @@ interface MeditationListScreenProps {
 }
 
 const MONTHS_SHORT = ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'];
-
-// Category icons mapping
-const categoryIcons: Record<MeditationCategory, keyof typeof Ionicons.glyphMap> = {
-  foi: 'shield-checkmark',
-  amour: 'heart',
-  pardon: 'hand-right',
-  priere: 'prism',
-  esperance: 'sunny',
-  sagesse: 'bulb',
-  paix: 'leaf',
-};
 
 export function MeditationListScreen({ navigation, route }: MeditationListScreenProps) {
   const initialCategory = route.params?.category;
@@ -163,7 +152,7 @@ export function MeditationListScreen({ navigation, route }: MeditationListScreen
             activeOpacity={0.8}
           >
             <Ionicons
-              name={categoryIcons[cat.key]}
+              name={cat.icon as keyof typeof Ionicons.glyphMap}
               size={14}
               color={selectedCategory === cat.key ? '#fff' : colors.primary}
               style={styles.categoryChipIcon}
